@@ -145,7 +145,7 @@ func TestList(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Neither a subdirectory nor a file that is not a user name is a pin.
-	if err := os.Mkdir(filepath.Join(dir, "trusted-roots"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "trust-anchors"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "README"), nil, 0600); err != nil {

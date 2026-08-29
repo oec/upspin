@@ -33,8 +33,8 @@
 //
 // Verifying every user's key by hand does not scale past a handful of them, so
 // a record may instead be attested: signed by a key that the reader has pinned
-// as entitled to speak for a domain, in the trusted-roots subdirectory of the
-// key directory. Pinning one such root for a domain is then enough to accept
+// as entitled to speak for a domain, in the trust-anchors subdirectory of the
+// key directory. Pinning one such anchor for a domain is then enough to accept
 // records for every user in it. Attestations are checked at the boundary, by
 // Accept, when a record arrives from somewhere the reader does not control;
 // what is already in the key directory is trusted because it is there.

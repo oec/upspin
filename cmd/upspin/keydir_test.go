@@ -125,7 +125,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 		{
 			// dana signs a record for another user in her domain.
 			// Nothing checks here that she is entitled to; that is
-			// the reader's decision, made by pinning a root.
+			// the reader's decision, made by pinning an anchor.
 			"attest to a record",
 			dana,
 			do("keysign -in=" + plain),
@@ -133,22 +133,22 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			saveAttested(attested, tampered),
 		},
 		{
-			// Without a root pinned for the domain there is nothing
+			// Without an anchor pinned for the domain there is nothing
 			// to check the attestation against, so it is refused.
-			"an attested record with no root is refused",
+			"an attested record with no anchor is refused",
 			dana,
 			do("keytrust -add -in=" + attested),
 			"",
-			fail("no trusted root for example.net"),
+			fail("no trust anchor for example.net"),
 		},
 		{
-			// A root vouches for a whole domain, so it must itself
+			// An anchor vouches for a whole domain, so it must itself
 			// be verified; -force stands in for that here.
-			"pin a trusted root",
+			"pin a trust anchor",
 			dana,
-			do("keytrust -add -root -force dana@example.net"),
+			do("keytrust -add -anchor -force dana@example.net"),
 			"",
-			expect("pinned dana@example.net as the trusted root for example.net", "SHA256:"),
+			expect("pinned dana@example.net as the trust anchor for example.net", "SHA256:"),
 		},
 		{
 			// Now the attestation carries the record, with no
@@ -178,11 +178,11 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			fail("attestation does not verify"),
 		},
 		{
-			"remove the trusted root",
+			"remove the trust anchor",
 			dana,
-			do("keytrust -remove -root example.net"),
+			do("keytrust -remove -anchor example.net"),
 			"",
-			expect("removed the trusted root for example.net"),
+			expect("removed the trust anchor for example.net"),
 		},
 	}...)
 }

@@ -26,7 +26,7 @@ substitute a key of its own choosing. Since an Upspin user record is
 not signed, pinning is the only way to be certain which key belongs
 to a user.
 
-With no flags, keytrust lists the pinned users and the trusted roots,
+With no flags, keytrust lists the pinned users and the trust anchors,
 with their key fingerprints, or prints the complete record for each
 user named as an argument.
 
@@ -38,7 +38,7 @@ record first.
 
 Pinning a key that has not been verified is pointless, so -add
 requires one of three things. Either the record carries an attestation
-that verifies against a trusted root already pinned for its domain, in
+that verifies against a trust anchor already pinned for its domain, in
 which case nothing more is needed; or -fingerprint gives the
 fingerprint the key must have; or -force pins the key unchecked.
 Obtain a fingerprint from its owner by some means an attacker does not
@@ -46,33 +46,33 @@ control, such as over the telephone, and see it for a given key with
 
 	upspin user <username>
 
-With -add and -root, keytrust pins a user as the trusted root for a
+With -add and -anchor, keytrust pins a user as the trust anchor for a
 domain: the key entitled to attest for every user in it, so that those
 users can be pinned on the strength of that one key rather than
 verified one by one. The domain defaults to the domain of the user
-being pinned, and -domain names another. A root is the key on which
+being pinned, and -domain names another. An anchor is the key on which
 all the others rest, so it must itself be verified: -fingerprint or
 -force is always required.
 
 With -remove, keytrust deletes the record for each user named, or,
-with -root, the trusted root for each domain named.
+with -anchor, the trust anchor for each domain named.
 
 See the keysign command for producing an attested record.
 `
 	fs := flag.NewFlagSet("keytrust", flag.ExitOnError)
 	add := fs.Bool("add", false, "add a pinned user record")
 	remove := fs.Bool("remove", false, "remove pinned user records")
-	root := fs.Bool("root", false, "the record is a trusted root, entitled to attest for a domain")
-	domain := fs.String("domain", "", "the `domain` a trusted root attests for (default: the root's own domain)")
+	anchor := fs.Bool("anchor", false, "the record is a trust anchor, entitled to attest for a domain")
+	domain := fs.String("domain", "", "the `domain` a trust anchor attests for (default: the anchor's own domain)")
 	inFile := fs.String("in", "", "`file` holding the user record to pin (default: ask the key server)")
 	fingerprint := fs.String("fingerprint", "", "require the key to have this `fingerprint` before pinning it")
 	force := fs.Bool("force", false, "pin the key without verifying its fingerprint")
 	s.ParseFlags(fs, args, help,
 		"keytrust [username...]\n"+
 			"              keytrust -add [-in=file] [-fingerprint=fp] [-force] username\n"+
-			"              keytrust -add -root [-domain=name] [-fingerprint=fp] [-force] username\n"+
+			"              keytrust -add -anchor [-domain=name] [-fingerprint=fp] [-force] username\n"+
 			"              keytrust -remove username...\n"+
-			"              keytrust -remove -root domain...")
+			"              keytrust -remove -anchor domain...")
 
 	if *add && *remove {
 		s.Exitf("cannot use -add and -remove together")
@@ -87,7 +87,7 @@ See the keysign command for producing an attested record.
 
 	switch {
 	case *add:
-		s.keytrustAdd(fs, dir, *inFile, *fingerprint, *force, *root, *domain)
+		s.keytrustAdd(fs, dir, *inFile, *fingerprint, *force, *anchor, *domain)
 	case *remove:
 		if fs.NArg() == 0 {
 			usageAndExit(fs)
@@ -95,22 +95,22 @@ See the keysign command for producing an attested record.
 		if *inFile != "" || *fingerprint != "" || *force {
 			s.Exitf("-in, -fingerprint and -force are only used with -add")
 		}
-		s.keytrustRemove(fs, dir, *root, *domain)
+		s.keytrustRemove(fs, dir, *anchor, *domain)
 	default:
-		if *inFile != "" || *fingerprint != "" || *force || *root || *domain != "" {
-			s.Exitf("-in, -fingerprint, -force, -root and -domain are only used with -add or -remove")
+		if *inFile != "" || *fingerprint != "" || *force || *anchor || *domain != "" {
+			s.Exitf("-in, -fingerprint, -force, -anchor and -domain are only used with -add or -remove")
 		}
 		s.keytrustList(fs, dir)
 	}
 }
 
-// keytrustAdd pins one user record, or one trusted root.
-func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, force, root bool, domain string) {
+// keytrustAdd pins one user record, or one trust anchor.
+func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, force, anchor bool, domain string) {
 	if fingerprint != "" && force {
 		s.Exitf("cannot use -fingerprint and -force together")
 	}
-	if !root && domain != "" {
-		s.Exitf("-domain is only used with -root")
+	if !anchor && domain != "" {
+		s.Exitf("-domain is only used with -anchor")
 	}
 
 	// Collect the record as bytes, so that an attestation, if there is
@@ -152,11 +152,11 @@ func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, f
 	}
 
 	// An attestation stands in for verifying the fingerprint by hand: the
-	// holder of the domain's trusted root has already vouched for the
-	// record. A root itself has nothing above it to vouch for it, so it
+	// holder of the domain's trust anchor has already vouched for the
+	// record. An anchor itself has nothing above it to vouch for it, so it
 	// must always be verified directly.
 	verified := false
-	if attestation != nil && !root {
+	if attestation != nil && !anchor {
 		if _, err := trust.Accept(dir, data); err != nil {
 			s.Exitf("the attestation on this record was not accepted: %v", err)
 		}
@@ -165,8 +165,8 @@ func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, f
 	if !verified {
 		if fingerprint == "" && !force {
 			what := "pinning a key that has not been verified is pointless"
-			if root {
-				what = "a trusted root vouches for a whole domain and must itself be verified"
+			if anchor {
+				what = "a trust anchor vouches for a whole domain and must itself be verified"
 			}
 			s.Exitf("%s; use -fingerprint to verify it, or -force to pin it anyway", what)
 		}
@@ -175,16 +175,16 @@ func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, f
 		}
 	}
 
-	if root {
+	if anchor {
 		if domain == "" {
 			if domain, err = domainOf(u.Name); err != nil {
 				s.Exit(err)
 			}
 		}
-		if err := trust.WriteRoot(dir, domain, u); err != nil {
+		if err := trust.WriteAnchor(dir, domain, u); err != nil {
 			s.Exit(err)
 		}
-		s.Printf("pinned %s as the trusted root for %s %s\n", u.Name, domain, factotum.Fingerprint(u.PublicKey))
+		s.Printf("pinned %s as the trust anchor for %s %s\n", u.Name, domain, factotum.Fingerprint(u.PublicKey))
 		return
 	}
 
@@ -204,19 +204,19 @@ func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, f
 	s.Printf("pinned %s %s%s\n", u.Name, factotum.Fingerprint(u.PublicKey), how)
 }
 
-// keytrustRemove deletes pinned records or trusted roots.
-func (s *State) keytrustRemove(fs *flag.FlagSet, dir string, root bool, domain string) {
+// keytrustRemove deletes pinned records or trust anchors.
+func (s *State) keytrustRemove(fs *flag.FlagSet, dir string, anchor bool, domain string) {
 	if domain != "" {
 		s.Exitf("-domain is not used with -remove; name the domains as arguments")
 	}
 	for i := 0; i < fs.NArg(); i++ {
 		arg := fs.Arg(i)
-		if root {
-			if err := trust.RemoveRoot(dir, arg); err != nil {
+		if anchor {
+			if err := trust.RemoveAnchor(dir, arg); err != nil {
 				s.Fail(err)
 				continue
 			}
-			s.Printf("removed the trusted root for %s\n", arg)
+			s.Printf("removed the trust anchor for %s\n", arg)
 			continue
 		}
 		name := s.cleanUserName(arg)
@@ -228,7 +228,7 @@ func (s *State) keytrustRemove(fs *flag.FlagSet, dir string, root bool, domain s
 	}
 }
 
-// keytrustList prints the pinned users and trusted roots, or the complete
+// keytrustList prints the pinned users and trust anchors, or the complete
 // record of each user named as an argument.
 func (s *State) keytrustList(fs *flag.FlagSet, dir string) {
 	if fs.NArg() > 0 {
@@ -262,17 +262,17 @@ func (s *State) keytrustList(fs *flag.FlagSet, dir string) {
 		s.Printf("%s\t%s\n", name, factotum.Fingerprint(u.PublicKey))
 	}
 
-	domains, err := trust.ListRoots(dir)
+	domains, err := trust.ListAnchors(dir)
 	if err != nil {
 		s.Exit(err)
 	}
 	for _, domain := range domains {
-		u, err := trust.ReadRoot(dir, domain)
+		u, err := trust.ReadAnchor(dir, domain)
 		if err != nil {
 			s.Fail(err)
 			continue
 		}
-		s.Printf("root for %s\t%s\t%s\n", domain, u.Name, factotum.Fingerprint(u.PublicKey))
+		s.Printf("anchor for %s\t%s\t%s\n", domain, u.Name, factotum.Fingerprint(u.PublicKey))
 	}
 }
 

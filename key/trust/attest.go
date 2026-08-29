@@ -36,21 +36,21 @@ import (
 //	---
 //	signature: a1b2c3...-d4e5f6...
 //
-// The signature is made by a trusted root: a key that the reader has pinned
-// as entitled to speak for a domain, held in the trusted-roots subdirectory
+// The signature is made by a trust anchor: a key that the reader has pinned
+// as entitled to speak for a domain, held in the trust-anchors subdirectory
 // of the key directory. It covers the record bytes exactly as they appear in
 // the file, so there is no question of canonical encoding, and it is prefixed
 // with a label so that it cannot be confused with a signature made over
 // something else.
 //
 // An attested record needs no separate verification by the reader: whoever
-// holds the root key for a domain vouches for every user in it. Pinning one
+// holds the anchor key for a domain vouches for every user in it. Pinning one
 // key per domain is therefore enough to accept records for all its users.
 
-// RootsDir is the subdirectory of the key directory that holds trusted roots,
+// AnchorsDir is the subdirectory of the key directory that holds trust anchors,
 // one file per domain, named for the domain and holding the upspin.User
 // record of the user entitled to attest for it.
-const RootsDir = "trusted-roots"
+const AnchorsDir = "trust-anchors"
 
 // separator marks the end of the record and the start of the signature. It is
 // also a YAML document marker, so an attested record is a valid YAML stream.
@@ -130,7 +130,7 @@ func cutLine(data []byte, line string) (before, after []byte, ok bool) {
 }
 
 // Sign returns an attested record for u, signed with f, which must be the
-// factotum of the user that readers pin as the trusted root for u's domain.
+// factotum of the user that readers pin as the trust anchor for u's domain.
 func Sign(f upspin.Factotum, u *upspin.User) ([]byte, error) {
 	const op errors.Op = "key/trust.Sign"
 	if f == nil {
@@ -177,11 +177,11 @@ func Verify(data []byte, key upspin.PublicKey) (*upspin.User, error) {
 	return u, nil
 }
 
-// Accept verifies an attested record against the trusted roots pinned in dir
+// Accept verifies an attested record against the trust anchors pinned in dir
 // and returns the record. It is the check to apply to a record that arrives
 // from somewhere the reader does not control. It fails if the record carries
-// no attestation, if no root is pinned for the record's domain, or if the
-// signature does not verify under that root.
+// no attestation, if no anchor is pinned for the record's domain, or if the
+// signature does not verify under that anchor.
 func Accept(dir string, data []byte) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Accept"
 	record, sig, err := Split(data)
@@ -191,7 +191,7 @@ func Accept(dir string, data []byte) (*upspin.User, error) {
 	if sig == nil {
 		return nil, errors.E(op, errors.Invalid, "record carries no attestation")
 	}
-	// Read the name first, to learn which root should have signed it. The
+	// Read the name first, to learn which anchor should have signed it. The
 	// record is not trusted until the signature has been checked; nothing
 	// is taken from it here but the domain.
 	u := new(upspin.User)
@@ -202,11 +202,11 @@ func Accept(dir string, data []byte) (*upspin.User, error) {
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
-	root, err := ReadRoot(dir, domain)
+	anchor, err := ReadAnchor(dir, domain)
 	if err != nil {
-		return nil, errors.E(op, errors.Errorf("no trusted root for %s: %v", domain, err))
+		return nil, errors.E(op, errors.Errorf("no trust anchor for %s: %v", domain, err))
 	}
-	attested, err := Verify(data, root.PublicKey)
+	attested, err := Verify(data, anchor.PublicKey)
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
@@ -227,33 +227,33 @@ func domainOf(name upspin.UserName) (string, error) {
 	return domain, nil
 }
 
-// rootFileName returns the name of the file holding the trusted root for
+// anchorFileName returns the name of the file holding the trust anchor for
 // domain, within dir.
-func rootFileName(op errors.Op, dir, domain string) (string, error) {
+func anchorFileName(op errors.Op, dir, domain string) (string, error) {
 	// A domain is validated by user.Parse as part of a user name; check it
 	// that way rather than trusting a bare string that is about to become
 	// a file name.
-	if _, _, _, err := user.Parse(upspin.UserName("root@" + domain)); err != nil {
+	if _, _, _, err := user.Parse(upspin.UserName("anyone@" + domain)); err != nil {
 		return "", errors.E(op, errors.Invalid, errors.Errorf("%q is not a valid domain: %v", domain, err))
 	}
 	domain = strings.ToLower(domain)
 	if filepath.Base(domain) != domain {
 		return "", errors.E(op, errors.Invalid, "domain is not a valid file name")
 	}
-	return filepath.Join(dir, RootsDir, domain), nil
+	return filepath.Join(dir, AnchorsDir, domain), nil
 }
 
-// ReadRoot returns the trusted root pinned for domain in dir. If there is
+// ReadAnchor returns the trust anchor pinned for domain in dir. If there is
 // none it returns an error of kind errors.NotExist.
-func ReadRoot(dir, domain string) (*upspin.User, error) {
-	const op errors.Op = "key/trust.ReadRoot"
-	file, err := rootFileName(op, dir, domain)
+func ReadAnchor(dir, domain string) (*upspin.User, error) {
+	const op errors.Op = "key/trust.ReadAnchor"
+	file, err := anchorFileName(op, dir, domain)
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(file)
 	if os.IsNotExist(err) {
-		return nil, errors.E(op, errors.NotExist, errors.Errorf("no trusted root for %s", domain))
+		return nil, errors.E(op, errors.NotExist, errors.Errorf("no trust anchor for %s", domain))
 	}
 	if err != nil {
 		return nil, errors.E(op, errors.IO, err)
@@ -268,14 +268,14 @@ func ReadRoot(dir, domain string) (*upspin.User, error) {
 	return u, nil
 }
 
-// WriteRoot pins u as the trusted root for domain in dir, replacing any root
+// WriteAnchor pins u as the trust anchor for domain in dir, replacing any anchor
 // already pinned for it.
-func WriteRoot(dir, domain string, u *upspin.User) error {
-	const op errors.Op = "key/trust.WriteRoot"
+func WriteAnchor(dir, domain string, u *upspin.User) error {
+	const op errors.Op = "key/trust.WriteAnchor"
 	if err := Validate(u); err != nil {
 		return errors.E(op, err)
 	}
-	file, err := rootFileName(op, dir, domain)
+	file, err := anchorFileName(op, dir, domain)
 	if err != nil {
 		return err
 	}
@@ -292,27 +292,27 @@ func WriteRoot(dir, domain string, u *upspin.User) error {
 	return nil
 }
 
-// RemoveRoot deletes the trusted root pinned for domain in dir.
-func RemoveRoot(dir, domain string) error {
-	const op errors.Op = "key/trust.RemoveRoot"
-	file, err := rootFileName(op, dir, domain)
+// RemoveAnchor deletes the trust anchor pinned for domain in dir.
+func RemoveAnchor(dir, domain string) error {
+	const op errors.Op = "key/trust.RemoveAnchor"
+	file, err := anchorFileName(op, dir, domain)
 	if err != nil {
 		return err
 	}
 	if err := os.Remove(file); err != nil {
 		if os.IsNotExist(err) {
-			return errors.E(op, errors.NotExist, errors.Errorf("no trusted root for %s", domain))
+			return errors.E(op, errors.NotExist, errors.Errorf("no trust anchor for %s", domain))
 		}
 		return errors.E(op, errors.IO, err)
 	}
 	return nil
 }
 
-// ListRoots returns the domains for which a trusted root is pinned in dir,
-// sorted. A directory that does not exist holds no roots and is not an error.
-func ListRoots(dir string) ([]string, error) {
-	const op errors.Op = "key/trust.ListRoots"
-	entries, err := os.ReadDir(filepath.Join(dir, RootsDir))
+// ListAnchors returns the domains for which a trust anchor is pinned in dir,
+// sorted. A directory that does not exist holds no anchors and is not an error.
+func ListAnchors(dir string) ([]string, error) {
+	const op errors.Op = "key/trust.ListAnchors"
+	entries, err := os.ReadDir(filepath.Join(dir, AnchorsDir))
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -324,7 +324,7 @@ func ListRoots(dir string) ([]string, error) {
 		if e.IsDir() {
 			continue
 		}
-		if _, _, _, err := user.Parse(upspin.UserName("root@" + e.Name())); err != nil {
+		if _, _, _, err := user.Parse(upspin.UserName("anyone@" + e.Name())); err != nil {
 			// Not a domain; not ours.
 			continue
 		}

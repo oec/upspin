@@ -20,9 +20,9 @@ for a user, followed by a signature over it made with the current
 user's key.
 
 An attested record can be pinned by anyone who has pinned the signing
-key as the trusted root for that user's domain, without their having
+key as the trust anchor for that user's domain, without their having
 to verify the user's key themselves. Signing the records of a domain's
-users is therefore how the holder of its root key spares everyone else
+users is therefore how the holder of its anchor key spares everyone else
 the work of checking each key in it by hand.
 
 The record is read from the file named by -in, or, if -in is absent,
@@ -30,11 +30,11 @@ looked up for the user named as the argument.
 
 Nothing here checks that the signing key is entitled to speak for the
 record's domain; that is the reader's decision, expressed by which key
-they pin as the trusted root for a domain. See the keytrust command,
-whose -add -root flags pin such a root.
+they pin as the trust anchor for a domain. See the keytrust command,
+whose -add -anchor flags pin such an anchor.
 
 A typical use is to attest to a record and send the result to someone
-who has already pinned this key as a root:
+who has already pinned this key as an anchor:
 
 	upspin keysign ann@example.com > ann.attested
 `

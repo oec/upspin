@@ -22,9 +22,9 @@ const (
 	bobSecret = "73412709577437621283953284627141522517131750837511539431619352194608555895350\n"
 )
 
-// rootFactotum returns a factotum holding annKey, standing for the holder of a
-// domain's trusted root, and the matching public key.
-func rootFactotum(t *testing.T) (upspin.Factotum, upspin.PublicKey) {
+// anchorFactotum returns a factotum holding annKey, standing for the holder of a
+// domain's trust anchor, and the matching public key.
+func anchorFactotum(t *testing.T) (upspin.Factotum, upspin.PublicKey) {
 	t.Helper()
 	f, err := factotum.NewFromKeys([]byte(annKey), []byte(annSecret), nil)
 	if err != nil {
@@ -33,7 +33,7 @@ func rootFactotum(t *testing.T) (upspin.Factotum, upspin.PublicKey) {
 	return f, annKey
 }
 
-// otherFactotum returns a factotum for a key that is not any domain's root.
+// otherFactotum returns a factotum for a key that is not any domain's trust anchor.
 func otherFactotum(t *testing.T) upspin.Factotum {
 	t.Helper()
 	f, err := factotum.NewFromKeys([]byte(bobKey), []byte(bobSecret), nil)
@@ -43,7 +43,7 @@ func otherFactotum(t *testing.T) upspin.Factotum {
 	return f
 }
 
-// attestedUser is the record a root attests to: some other user in its domain.
+// attestedUser is the record an anchor attests to: some other user in its domain.
 func attestedUser() *upspin.User {
 	u := annUser()
 	u.Name = "carol@example.com"
@@ -52,7 +52,7 @@ func attestedUser() *upspin.User {
 }
 
 func TestSignVerify(t *testing.T) {
-	f, key := rootFactotum(t)
+	f, key := anchorFactotum(t)
 	want := attestedUser()
 
 	data, err := Sign(f, want)
@@ -78,7 +78,7 @@ func TestSignVerify(t *testing.T) {
 }
 
 func TestVerifyRejects(t *testing.T) {
-	f, key := rootFactotum(t)
+	f, key := anchorFactotum(t)
 	data, err := Sign(f, attestedUser())
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestVerifyRejects(t *testing.T) {
 		}
 	})
 
-	t.Run("signed by a non-root", func(t *testing.T) {
+	t.Run("signed by a non-anchor", func(t *testing.T) {
 		other, err := Sign(otherFactotum(t), attestedUser())
 		if err != nil {
 			t.Fatal(err)
@@ -165,27 +165,27 @@ func TestSplit(t *testing.T) {
 	}
 }
 
-func TestAcceptUsesPinnedRoot(t *testing.T) {
+func TestAcceptUsesPinnedAnchor(t *testing.T) {
 	dir := t.TempDir()
-	f, key := rootFactotum(t)
+	f, key := anchorFactotum(t)
 
-	root := annUser() // ann@example.com, holding annKey
-	if root.PublicKey != key {
-		t.Fatal("test setup: root record does not hold the root key")
+	anchor := annUser() // ann@example.com, holding annKey
+	if anchor.PublicKey != key {
+		t.Fatal("test setup: anchor record does not hold the anchor key")
 	}
 	data, err := Sign(f, attestedUser()) // carol@example.com
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// With no root pinned there is nothing to check the signature
+	// With no anchor pinned there is nothing to check the signature
 	// against, so the record must be refused.
 	if _, err := Accept(dir, data); err == nil {
-		t.Error("Accept succeeded with no trusted root pinned")
+		t.Error("Accept succeeded with no trust anchor pinned")
 	}
 
-	if err := WriteRoot(dir, "example.com", root); err != nil {
-		t.Fatalf("WriteRoot: %v", err)
+	if err := WriteAnchor(dir, "example.com", anchor); err != nil {
+		t.Fatalf("WriteAnchor: %v", err)
 	}
 	got, err := Accept(dir, data)
 	if err != nil {
@@ -195,8 +195,8 @@ func TestAcceptUsesPinnedRoot(t *testing.T) {
 		t.Errorf("Accept = %q; want carol@example.com", got.Name)
 	}
 
-	// A root speaks only for the domain it is pinned under. The same
-	// record, offered for a user in another domain, has no root.
+	// An anchor speaks only for the domain it is pinned under. The same
+	// record, offered for a user in another domain, has no anchor.
 	other := attestedUser()
 	other.Name = "carol@example.org"
 	otherData, err := Sign(f, other)
@@ -204,19 +204,19 @@ func TestAcceptUsesPinnedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Accept(dir, otherData); err == nil {
-		t.Error("Accept succeeded for a domain with no pinned root")
+		t.Error("Accept succeeded for a domain with no pinned anchor")
 	}
 
-	// A root pinned for that other domain must still not accept a
+	// An anchor pinned for that other domain must still not accept a
 	// signature made by a different key.
 	elsewhere := annUser()
 	elsewhere.Name = "admin@example.org"
 	elsewhere.PublicKey = bobKey
-	if err := WriteRoot(dir, "example.org", elsewhere); err != nil {
+	if err := WriteAnchor(dir, "example.org", elsewhere); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Accept(dir, otherData); err == nil {
-		t.Error("Accept succeeded under a root that did not sign the record")
+		t.Error("Accept succeeded under an anchor that did not sign the record")
 	}
 
 	// An unattested record is never acceptable, however well known its
@@ -231,72 +231,72 @@ func TestAcceptUsesPinnedRoot(t *testing.T) {
 	}
 }
 
-func TestRoots(t *testing.T) {
+func TestAnchors(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := ReadRoot(dir, "example.com"); !errors.Is(errors.NotExist, err) {
-		t.Errorf("ReadRoot of absent root = %v; want NotExist", err)
+	if _, err := ReadAnchor(dir, "example.com"); !errors.Is(errors.NotExist, err) {
+		t.Errorf("ReadAnchor of absent anchor = %v; want NotExist", err)
 	}
-	if got, err := ListRoots(dir); err != nil || got != nil {
-		t.Errorf("ListRoots of absent directory = %v, %v; want nil, nil", got, err)
+	if got, err := ListAnchors(dir); err != nil || got != nil {
+		t.Errorf("ListAnchors of absent directory = %v, %v; want nil, nil", got, err)
 	}
 
-	root := annUser()
-	if err := WriteRoot(dir, "example.com", root); err != nil {
-		t.Fatalf("WriteRoot: %v", err)
+	anchor := annUser()
+	if err := WriteAnchor(dir, "example.com", anchor); err != nil {
+		t.Fatalf("WriteAnchor: %v", err)
 	}
-	// A root is pinned for a domain, so the domain names the file.
-	if _, err := os.Stat(filepath.Join(dir, RootsDir, "example.com")); err != nil {
-		t.Errorf("root not stored under the domain: %v", err)
+	// An anchor is pinned for a domain, so the domain names the file.
+	if _, err := os.Stat(filepath.Join(dir, AnchorsDir, "example.com")); err != nil {
+		t.Errorf("anchor not stored under the domain: %v", err)
 	}
-	// Roots live in a subdirectory, so they are not mistaken for users.
+	// Anchors live in a subdirectory, so they are not mistaken for users.
 	names, err := List(dir)
 	if err != nil || names != nil {
-		t.Errorf("List = %v, %v; roots must not appear as pinned users", names, err)
+		t.Errorf("List = %v, %v; anchors must not appear as pinned users", names, err)
 	}
 
 	other := annUser()
 	other.Name = "admin@example.org"
-	if err := WriteRoot(dir, "example.org", other); err != nil {
+	if err := WriteAnchor(dir, "example.org", other); err != nil {
 		t.Fatal(err)
 	}
-	domains, err := ListRoots(dir)
+	domains, err := ListAnchors(dir)
 	if err != nil {
-		t.Fatalf("ListRoots: %v", err)
+		t.Fatalf("ListAnchors: %v", err)
 	}
 	if len(domains) != 2 || domains[0] != "example.com" || domains[1] != "example.org" {
-		t.Errorf("ListRoots = %v; want [example.com example.org]", domains)
+		t.Errorf("ListAnchors = %v; want [example.com example.org]", domains)
 	}
 
-	got, err := ReadRoot(dir, "example.com")
+	got, err := ReadAnchor(dir, "example.com")
 	if err != nil {
-		t.Fatalf("ReadRoot: %v", err)
+		t.Fatalf("ReadAnchor: %v", err)
 	}
-	if got.Name != root.Name {
-		t.Errorf("ReadRoot = %q; want %q", got.Name, root.Name)
+	if got.Name != anchor.Name {
+		t.Errorf("ReadAnchor = %q; want %q", got.Name, anchor.Name)
 	}
 	// The domain is matched case-insensitively, as user names are.
-	if _, err := ReadRoot(dir, "EXAMPLE.com"); err != nil {
-		t.Errorf("ReadRoot with uppercase domain: %v", err)
+	if _, err := ReadAnchor(dir, "EXAMPLE.com"); err != nil {
+		t.Errorf("ReadAnchor with uppercase domain: %v", err)
 	}
 
-	if err := RemoveRoot(dir, "example.com"); err != nil {
-		t.Fatalf("RemoveRoot: %v", err)
+	if err := RemoveAnchor(dir, "example.com"); err != nil {
+		t.Fatalf("RemoveAnchor: %v", err)
 	}
-	if _, err := ReadRoot(dir, "example.com"); !errors.Is(errors.NotExist, err) {
-		t.Errorf("ReadRoot after RemoveRoot = %v; want NotExist", err)
+	if _, err := ReadAnchor(dir, "example.com"); !errors.Is(errors.NotExist, err) {
+		t.Errorf("ReadAnchor after RemoveAnchor = %v; want NotExist", err)
 	}
 }
 
-// TestRootTraversal checks that a hostile domain cannot escape the roots
+// TestAnchorTraversal checks that a hostile domain cannot escape the anchors
 // directory, since the domain becomes part of a file name.
-func TestRootTraversal(t *testing.T) {
+func TestAnchorTraversal(t *testing.T) {
 	dir := t.TempDir()
 	for _, domain := range []string{"../../etc/passwd", "a/b.com", "..", ""} {
-		if _, err := ReadRoot(dir, domain); err == nil {
-			t.Errorf("ReadRoot(%q) succeeded; want error", domain)
+		if _, err := ReadAnchor(dir, domain); err == nil {
+			t.Errorf("ReadAnchor(%q) succeeded; want error", domain)
 		} else if errors.Is(errors.IO, err) {
-			t.Errorf("ReadRoot(%q) reached the file system: %v", domain, err)
+			t.Errorf("ReadAnchor(%q) reached the file system: %v", domain, err)
 		}
 	}
 }
@@ -306,7 +306,7 @@ func TestRootTraversal(t *testing.T) {
 // trusted because it is there.
 func TestReadAttested(t *testing.T) {
 	dir := t.TempDir()
-	f, _ := rootFactotum(t)
+	f, _ := anchorFactotum(t)
 	want := attestedUser()
 	data, err := Sign(f, want)
 	if err != nil {
