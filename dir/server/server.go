@@ -17,6 +17,7 @@ import (
 	"upspin.io/dir/server/serverlog"
 	"upspin.io/dir/server/tree"
 	"upspin.io/errors"
+	"upspin.io/key/trust"
 	"upspin.io/log"
 	"upspin.io/metric"
 	"upspin.io/pack"
@@ -129,8 +130,10 @@ func New(cfg upspin.Config, options ...string) (upspin.DirServer, error) {
 	if cfg.DirEndpoint().Transport == upspin.Unassigned {
 		return nil, errors.E(op, errors.Invalid, "directory endpoint cannot be unassigned")
 	}
-	if cfg.KeyEndpoint().Transport == upspin.Unassigned {
-		return nil, errors.E(op, errors.Invalid, "key endpoint cannot be unassigned")
+	// A server with no key server can still resolve the users it
+	// authenticates, provided it has a directory of pinned records.
+	if err := trust.CheckKeyEndpoint(cfg); err != nil {
+		return nil, errors.E(op, err)
 	}
 	if cfg.StoreEndpoint().Transport == upspin.Unassigned {
 		return nil, errors.E(op, errors.Invalid, "store endpoint cannot be unassigned")

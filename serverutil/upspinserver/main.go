@@ -25,6 +25,7 @@ import (
 	"upspin.io/errors"
 	"upspin.io/factotum"
 	"upspin.io/flags"
+	"upspin.io/key/trust"
 	"upspin.io/log"
 	"upspin.io/rpc/dirserver"
 	"upspin.io/rpc/storeserver"
@@ -117,6 +118,18 @@ func initServer(mode initMode) (*subcmd.ServerConfig, upspin.Config, *perm.Perm,
 			Transport: upspin.Remote,
 			NetAddr:   serverConfig.KeyServer,
 		})
+	}
+
+	// A directory of pinned user records, consulted before the key server.
+	// For a server this directory is in effect the list of users it will
+	// authenticate, since every Dir and Store method requires the caller's
+	// key to verify the request signature.
+	if serverConfig.KeyDir != "" {
+		keyDir := serverConfig.KeyDir
+		if !filepath.IsAbs(keyDir) {
+			keyDir = filepath.Join(*cfgPath, keyDir)
+		}
+		cfg = config.SetValue(cfg, trust.ConfigKey, keyDir)
 	}
 
 	storeCfg := config.SetPacking(cfg, upspin.EEIntegrityPack)

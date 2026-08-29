@@ -8,6 +8,7 @@ package unassigned // import "upspin.io/key/unassigned"
 import (
 	"upspin.io/bind"
 	"upspin.io/errors"
+	"upspin.io/key/trust"
 	"upspin.io/upspin"
 )
 
@@ -54,5 +55,8 @@ func (Server) Dial(config upspin.Config, e upspin.Endpoint) (upspin.Service, err
 const transport = upspin.Unassigned
 
 func init() {
-	bind.RegisterKeyServer(transport, Server{})
+	// Wrapped, so that a configuration with no key server can still
+	// resolve users from the local pinned key directory. Lookups that are
+	// not satisfied there still fail, as they must.
+	bind.RegisterKeyServer(transport, trust.Wrap(Server{}))
 }

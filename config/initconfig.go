@@ -101,7 +101,7 @@ func FromFile(name string) (upspin.Config, error) {
 //   # lines that begin with a hash are ignored
 //   key = value
 // where key may be one of username, keyserver, dirserver, storeserver,
-// packing, secrets, or tlscerts.
+// packing, secrets, keydir, or tlscerts.
 //
 // The default configuration file location is $HOME/upspin/config.
 // If passed a non-nil io.Reader, that is used instead of the default file.
@@ -120,6 +120,11 @@ func FromFile(name string) (upspin.Config, error) {
 // The special value "none" indicates there are no secrets to load;
 // in this case, the returned config will not include a Factotum
 // and the returned error is ErrNoFactotum.
+//
+// The keydir key specifies a directory of pinned user records, consulted
+// before the key server and authoritative over it. See upspin.io/key/trust.
+// The default value is the empty string, in which case every user is resolved
+// through the key server.
 //
 // The tlscerts key specifies a directory containing PEM certificates define
 // the certificate pool used for verifying client TLS connections,

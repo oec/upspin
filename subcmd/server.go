@@ -27,6 +27,12 @@ type ServerConfig struct {
 
 	// Optionally, set the host and port for the KeyServer for lookups.
 	KeyServer upspin.NetAddr
+
+	// KeyDir optionally names a directory of pinned user records, which
+	// the server consults before the KeyServer. See upspin.io/key/trust.
+	// If it is not an absolute path it is taken relative to the server
+	// configuration directory.
+	KeyDir string
 }
 
 // ServerConfigFile specifies the file name of the JSON-encoded ServerConfig.

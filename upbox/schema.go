@@ -24,6 +24,7 @@ Schema files must be in YAML format, of this general form:
 	  flags:
 	    debug: cockroach
 	keyserver: key.uspin.io
+	usekeydir: false
 	domain: example.com
 	dir: /path/to/upbox/state
 
@@ -70,6 +71,12 @@ KeyServer specifies the KeyServer that each user in the cluster
 should use. If it is empty, then a Server named "keyserver" must
 be included in the list of Servers, and the address of that server
 is used.
+
+UseKeyDir specifies that the cluster should run without a KeyServer,
+distributing user records instead through a directory of pinned
+records shared by every user and server in the schema. When it is
+true no keyserver is required, and each config names an unassigned
+key server and that directory. See upspin.io/key/trust.
 
 Domain specifies a domain that is appended to any user names that do
 not include a domain component.
@@ -140,6 +147,7 @@ import (
 	"time"
 
 	"upspin.io/config"
+	"upspin.io/key/trust"
 	"upspin.io/log"
 	"upspin.io/rpc/local"
 	"upspin.io/test/testutil"
@@ -165,6 +173,13 @@ type Schema struct {
 
 	// KeyServer specifies the KeyServer used by each user in the cluster.
 	KeyServer string
+
+	// UseKeyDir specifies that user records should be distributed through
+	// a shared directory of pinned records rather than a KeyServer. When
+	// it is set no keyserver is needed, and each user and server is
+	// configured with an unassigned key server and a keydir holding every
+	// user in the schema. See upspin.io/key/trust.
+	UseKeyDir bool
 
 	// LogLevel specifies the logging level that each server should use.
 	LogLevel string
@@ -342,7 +357,7 @@ func SchemaFromYAML(doc string) (*Schema, error) {
 	}
 
 	// Check for KeyServer only after we may have set it as "keyserver" above.
-	if sc.KeyServer == "" {
+	if sc.KeyServer == "" && !sc.UseKeyDir {
 		return nil, errors.New("no keyserver in configuration")
 	}
 
@@ -549,8 +564,10 @@ func (sc *Schema) Start() error {
 		s.cmd = cmd
 	}
 	// Wait for the keyserver to start and add the users to it.
-	if err := waitReady(sc.KeyServer); err != nil {
-		return err
+	if !sc.UseKeyDir {
+		if err := waitReady(sc.KeyServer); err != nil {
+			return err
+		}
 	}
 	for _, u := range sc.Users {
 		if u.Name == keyUser {
@@ -561,7 +578,7 @@ func (sc *Schema) Start() error {
 			return fmt.Errorf("writing config for %v: %v", u.Name, err)
 		}
 
-		if keyUser == "" {
+		if keyUser == "" && !sc.UseKeyDir {
 			continue
 		}
 		pk, err := os.ReadFile(filepath.Join(sc.Dir, u.Name, "public.upspinkey"))
@@ -581,6 +598,13 @@ func (sc *Schema) Start() error {
 			Dirs:      []upspin.Endpoint{*dir},
 			Stores:    []upspin.Endpoint{*store},
 			PublicKey: upspin.PublicKey(pk),
+		}
+		if sc.UseKeyDir {
+			// No key server to tell; pin the record instead.
+			if err := trust.Write(sc.keyDir(), user); err != nil {
+				return err
+			}
+			continue
 		}
 		userYAML, err := yaml.Marshal(user)
 		if err != nil {
@@ -691,6 +715,12 @@ func (sc *Schema) Config(user string) string {
 }
 
 // writeConfig writes a config file for user named "config.name" inside dir.
+// keyDir returns the directory holding pinned user records, used when the
+// schema specifies UseKeyDir.
+func (sc *Schema) keyDir() string {
+	return filepath.Join(sc.Dir, "keys")
+}
+
 func (sc *Schema) writeConfig(user string) error {
 	u, ok := sc.user[user]
 	if !ok {
@@ -710,8 +740,15 @@ func (sc *Schema) writeConfig(user string) error {
 		"storeserver: " + u.StoreServer,
 		"dirserver: " + u.DirServer,
 	}
-	switch user {
-	case "keyserver":
+	switch {
+	case sc.UseKeyDir:
+		// No key server at all: every user record is pinned in a
+		// directory shared by all the users and servers in the schema.
+		cfg = append(cfg,
+			"keyserver: unassigned",
+			trust.ConfigKey+": "+sc.keyDir(),
+		)
+	case user == "keyserver":
 		cfg = append(cfg,
 			"keyserver: inprocess,",
 		)

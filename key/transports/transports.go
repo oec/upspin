@@ -10,6 +10,7 @@ package transports // import "upspin.io/key/transports"
 import (
 	"upspin.io/bind"
 	"upspin.io/key/inprocess"
+	"upspin.io/key/trust"
 	"upspin.io/key/usercache"
 	"upspin.io/upspin"
 
@@ -18,5 +19,5 @@ import (
 )
 
 func init() {
-	bind.RegisterKeyServer(upspin.InProcess, usercache.Global(inprocess.New()))
+	bind.RegisterKeyServer(upspin.InProcess, trust.Wrap(usercache.Global(inprocess.New())))
 }

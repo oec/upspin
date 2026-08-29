@@ -16,6 +16,7 @@ import (
 
 	"upspin.io/dir/server/serverlog"
 	"upspin.io/errors"
+	"upspin.io/key/trust"
 	"upspin.io/log"
 	"upspin.io/pack"
 	"upspin.io/path"
@@ -100,8 +101,8 @@ func New(config upspin.Config, user *serverlog.User) (*Tree, error) {
 	if config.StoreEndpoint().Transport == upspin.Unassigned {
 		return nil, errors.E(errors.Invalid, "unassigned store endpoint")
 	}
-	if config.KeyEndpoint().Transport == upspin.Unassigned {
-		return nil, errors.E(errors.Invalid, "unassigned key endpoint")
+	if err := trust.CheckKeyEndpoint(config); err != nil {
+		return nil, errors.E(errors.Invalid, err)
 	}
 	if config.Factotum() == nil {
 		return nil, errors.E(errors.Invalid, "factotum is nil")

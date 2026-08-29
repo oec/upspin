@@ -57,6 +57,7 @@ Upspin commands:
 	getref
 	info
 	keygen
+	keytrust
 	link
 	ls
 	mkdir
@@ -344,6 +345,55 @@ Flags:
     	back up the existing keys and replace them with new ones
   -secretseed string
     	the seed containing a 128-bit secret in proquint format or a file that contains it
+
+
+
+Sub-command keytrust
+
+Usage: upspin keytrust [username...]
+              keytrust -add [-in=file] [-fingerprint=fp] [-force] username
+              keytrust -remove username...
+
+Keytrust manages the directory of pinned user records named by the
+keydir entry in the configuration file. A pinned record is used as it
+stands: the key server is not consulted for that user, and cannot
+substitute a key of its own choosing. Since an Upspin user record is
+not signed, pinning is the only way to be certain which key belongs
+to a user.
+
+With no flags, keytrust lists the pinned users and their key
+fingerprints, or prints the complete record for each user named as an
+argument.
+
+With -add, keytrust pins one user. The record is read from the file
+named by -in, or, if -in is absent, from the key server. Because a
+pinned record must not be replaced by whatever a key server happens to
+return, adding a user who is already pinned is refused; remove the old
+record first.
+
+Pinning a key that has not been verified is pointless, so -add
+requires either -fingerprint, giving the fingerprint the key must
+have, or -force to pin without checking. Obtain the fingerprint from
+its owner by some means an attacker does not control, such as over the
+telephone, and see it for a given key with
+
+	upspin user <username>
+
+With -remove, keytrust deletes the record for each user named.
+
+Flags:
+  -add
+    	add a pinned user record
+  -fingerprint fingerprint
+    	require the key to have this fingerprint before pinning it
+  -force
+    	pin the key without verifying its fingerprint
+  -help
+    	print more information about the command
+  -in file
+    	file holding the user record to pin (default: ask the key server)
+  -remove
+    	remove pinned user records
 
 
 

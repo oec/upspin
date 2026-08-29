@@ -11,6 +11,7 @@ import (
 
 	"upspin.io/bind"
 	"upspin.io/errors"
+	"upspin.io/key/trust"
 	"upspin.io/key/usercache"
 	"upspin.io/log"
 	"upspin.io/rpc"
@@ -105,7 +106,7 @@ const transport = upspin.Remote
 
 func init() {
 	r := &remote{} // uninitialized until Dial time.
-	bind.RegisterKeyServer(transport, usercache.Global(r))
+	bind.RegisterKeyServer(transport, trust.Wrap(usercache.Global(r)))
 }
 
 func (r *remote) opf(method string, format string, args ...interface{}) *operation {

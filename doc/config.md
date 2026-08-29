@@ -39,6 +39,7 @@ The keys identify settings, and there several defined:
 * `storeserver:` Server to write new storage.
 * `cache:` Whether to use a local store and directory cache server.
 * `secrets:` Directory holding private keys.
+* `keydir:` Directory holding pinned public keys of other users.
 * `tlscerts:` Directory holding TLS certificates.
 
 One can also specify values for flags used by various commands.
@@ -159,6 +160,33 @@ go doc upspin.io/cmd/cacheserver
 and private keys are stored.
 If not set, the keys are assumed to live in the directory `.ssh` within
 the user's home directory (on Unix, `$HOME/.ssh`).
+
+* The **`keydir`** setting identifies a directory of pinned user records:
+records that are used as they stand, without consulting the key server.
+An Upspin user record is not signed, so whatever a key server returns is
+taken on faith, including the public key to which the client will wrap the
+keys of the files it shares. Pinning a record removes that trust for that
+user.
+The directory holds one file per user, named for the user, in the same YAML
+format printed by `upspin user`, so a record can be installed with
+
+```
+upspin user ann@example.com > $keydir/ann@example.com
+```
+
+	although `upspin keytrust -add` is preferable, since it will check the
+	key's fingerprint before pinning it.
+	If `keydir` is not set, every user is resolved through the key server.
+
+	A server may set `keydir` too, in which case the directory is in effect
+	the list of users the server will authenticate, since every directory
+	and storage method requires the caller's key to verify the request
+	signature. A server that sets `keydir` may set `keyserver: unassigned`,
+	and will then use no key server at all. For more information, run
+
+```
+go doc upspin.io/key/trust
+```
 
 * The **`tlscerts`** setting identifies a directory in which to locate TLS
 certificate root authorities.
