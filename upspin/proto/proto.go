@@ -33,7 +33,7 @@ import (
 // To regenerate the protocol buffer output for this package, run
 //	go generate
 
-//go:generate protoc upspin.proto --go_out=.
+//go:generate protoc upspin.proto --go_out=paths=source_relative:.
 
 // All these converters are an unfortunate side-effect of not letting protobufs rule our types.
 

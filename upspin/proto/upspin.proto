@@ -6,6 +6,8 @@ syntax = "proto3";
 
 package proto;
 
+option go_package = "upspin.io/upspin/proto";
+
 // See proto.go for a description of these protocol buffers.
 
 // Endpoint mirrors upspin.Endpoint.

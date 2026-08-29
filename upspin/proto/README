@@ -22,18 +22,16 @@ protoc or protoc-gen-go.
 To debug, run 'which protoc' and 'which protoc-gen-go' and check that the
 commands in your path are the ones you just installed.
 
-Note on the attestation field
------------------------------
+Notes
+-----
 
-The attestation field of message User was added to upspin.pb.go without
-protoc, which was not available at the time. The Go struct field, its getter
-and the gzipped FileDescriptorProto in fileDescriptor0 were edited to match
-what protoc would have produced: the descriptor was decompressed, unmarshalled
-into a descriptorpb.FileDescriptorProto with the protobuf library this module
-already depends on, given the new field, and written back. The encoding is
-driven by that descriptor rather than by the struct tags, so a field present in
-one and not the other would be dropped in silence; TestUserAttestation and
-TestUserAttestationIsInDescriptor in proto_test.go exist to catch that.
+upspin.proto sets "option go_package". Versions of protoc-gen-go after the one
+this package was first generated with refuse to run without it, or without an
+equivalent M argument on the command line. The go:generate line also passes
+paths=source_relative, so that the output lands beside the .proto rather than
+in a directory named after the Go import path.
 
-Regenerating this package with a real protoc should produce the same field,
-since upspin.proto declares it, and those tests should keep passing.
+Regenerating with a modern protoc-gen-go rewrites the file in the newer
+generated form, which is longer and uses google.golang.org/protobuf directly.
+The exported API is a superset of what the older form provided, so callers are
+unaffected.
