@@ -22,6 +22,10 @@ type server struct {
 	// sets holds the delegated key sets, or is nil if the configuration
 	// names none.
 	sets *sets
+
+	// discovery holds what has been found by asking domains directly, or
+	// is nil if the configuration does not ask for that.
+	discovery *discovery
 }
 
 // deferredDial defers dialing the wrapped service until a request needs it, so
@@ -37,9 +41,10 @@ type deferredDial struct {
 
 var _ upspin.KeyServer = (*server)(nil)
 
-// Wrap returns a KeyServer that answers Lookup from the pinned key directory
-// and the delegated key sets named by the configuration passed to Dial, and
-// consults s for users found in neither.
+// Wrap returns a KeyServer that answers Lookup from the pinned key directory,
+// the delegated key sets, and the records domains publish for themselves, as
+// the configuration passed to Dial asks, and consults s for users found in
+// none of them.
 //
 // It must be the outermost wrapper. In particular it must enclose, not be
 // enclosed by, key/usercache, so that a cached answer from a key server can
@@ -48,11 +53,12 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 	return &server{base: s, dd: &deferredDial{}}
 }
 
-// Lookup implements upspin.KeyServer. It consults three sources in turn and
+// Lookup implements upspin.KeyServer. It consults four sources in turn and
 // returns the first answer: the pinned key directory, if the configuration
-// names one; the delegated key sets, if it names any; and last the wrapped key
-// server. The order is the order of authority, so that neither a delegated set
-// nor a key server, nor a cache in front of one, can shadow a pinned record.
+// names one; the delegated key sets, if it names any; the records a domain
+// publishes for itself, if the configuration asks for discovery; and last the
+// wrapped key server. The order is the order of authority, so that nothing
+// found further down, nor a cache in front of it, can shadow a pinned record.
 //
 // A pinned record that is present but unusable is an error: the lookup does
 // not fall through, since that would let a damaged or tampered record be
@@ -73,6 +79,11 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 	}
 	if s.sets != nil {
 		if u := s.sets.lookup(s.dd.config, s.dd.dir, name); u != nil {
+			return u, nil
+		}
+	}
+	if s.discovery != nil {
+		if u := s.discovery.lookup(s.dd.config, s.dd.dir, name); u != nil {
 			return u, nil
 		}
 	}
@@ -120,6 +131,10 @@ func (s *server) Dial(cfg upspin.Config, e upspin.Endpoint) (upspin.Service, err
 	c.sets = nil
 	if len(paths) > 0 {
 		c.sets = &sets{paths: paths}
+	}
+	c.discovery = nil
+	if Discovery(cfg) {
+		c.discovery = &discovery{}
 	}
 	return &c, nil
 }

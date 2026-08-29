@@ -352,10 +352,17 @@ Flags:
 Sub-command keysign
 
 Usage: upspin keysign [-in=file] [username]
+              keysign -bundle username-or-file...
 
 Keysign writes to standard output an attested user record: the record
 for a user, followed by a signature over it made with the current
 user's key.
+
+With -bundle, keysign attests to several records at once and writes
+them as a bundle, the form a domain publishes at
+/.well-known/upspin/keys for readers that discover records over DNS.
+The arguments are then user names, files, or both; a file may hold a
+record already attested, in which case the attestation is replaced.
 
 An attested record can be pinned by anyone who has pinned the signing
 key as the trust anchor for that user's domain, without their having
@@ -376,7 +383,13 @@ who has already pinned this key as an anchor:
 
 	upspin keysign ann@example.com > ann.attested
 
+or, to publish every user of a domain at once:
+
+	upspin keysign -bundle ann@example.com chris@example.com > keys
+
 Flags:
+  -bundle
+    	attest to several records and write them as a published bundle
   -help
     	print more information about the command
   -in file

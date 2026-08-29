@@ -41,6 +41,7 @@ The keys identify settings, and there several defined:
 * `secrets:` Directory holding private keys.
 * `keydir:` Directory holding pinned public keys of other users.
 * `keysets:` Upspin directories of published user records to also consult.
+* `keydiscovery:` Whether to fetch records from the domain of a user's name.
 * `tlscerts:` Directory holding TLS certificates.
 
 One can also specify values for flags used by various commands.
@@ -218,6 +219,38 @@ keysets:
 	receives no special treatment from the directory server.
 	The sets are read as a snapshot and re-read periodically, so a record
 	added to one becomes visible within a few minutes rather than at once.
+
+* The **`keydiscovery`** setting, if `true`, allows a user's record to be
+fetched from the domain of their own name, with no prior arrangement between
+you and that domain.
+It is off unless set.
+
+	A domain says where its records are with a DNS SRV record,
+
+```
+_upspin._tcp.example.com. 86400 IN SRV 10 60 443 keys.example.com.
+```
+
+	and serves them over HTTPS beneath a well-known path, either as a
+	bundle of every record it publishes,
+
+```
+https://keys.example.com/.well-known/upspin/keys
+```
+
+	or one file per user, named for the user, under the same path.
+	A domain that serves its records from its own web server needs no SRV
+	record: with none, the well-known path on the domain itself is tried.
+	Produce a bundle with `upspin keysign -bundle`.
+
+	Nothing in this trusts DNS, the server that answers, or its
+	certificate.
+	A discovered record is used only if it is attested by a trust anchor
+	pinned in `keydir` for the domain in the *user's own name*, never for
+	the host the SRV record named.
+	An attacker who can answer DNS, or who holds a certificate for a host
+	of their choosing, can therefore decide which server is asked but not
+	what the answer is.
 
 * The **`tlscerts`** setting identifies a directory in which to locate TLS
 certificate root authorities.

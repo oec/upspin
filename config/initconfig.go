@@ -101,7 +101,7 @@ func FromFile(name string) (upspin.Config, error) {
 //   # lines that begin with a hash are ignored
 //   key = value
 // where key may be one of username, keyserver, dirserver, storeserver,
-// packing, secrets, keydir, keysets, or tlscerts.
+// packing, secrets, keydir, keysets, keydiscovery, or tlscerts.
 //
 // The default configuration file location is $HOME/upspin/config.
 // If passed a non-nil io.Reader, that is used instead of the default file.
@@ -130,6 +130,11 @@ func FromFile(name string) (upspin.Config, error) {
 // consult, after the keydir and before the key server. A record from one of
 // them is used only if it is attested by a trust anchor pinned in the keydir.
 // See upspin.io/key/trust.
+//
+// The keydiscovery key, if true, allows a user's record to be fetched from
+// the domain of their name, found by DNS SRV record or at a well-known path.
+// Such a record is used only if it is attested by a trust anchor pinned in the
+// keydir. The default is false. See upspin.io/key/trust.
 //
 // The tlscerts key specifies a directory containing PEM certificates define
 // the certificate pool used for verifying client TLS connections,
