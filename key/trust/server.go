@@ -11,13 +11,17 @@ import (
 	"upspin.io/upspin"
 )
 
-// server is a KeyServer that answers from the pinned key directory before
-// consulting the KeyServer it wraps.
+// server is a KeyServer that answers from the pinned key directory, then from
+// the delegated key sets, before consulting the KeyServer it wraps.
 type server struct {
 	// base is the wrapped KeyServer, not yet dialed.
 	base upspin.KeyServer
 
 	dd *deferredDial
+
+	// sets holds the delegated key sets, or is nil if the configuration
+	// names none.
+	sets *sets
 }
 
 // deferredDial defers dialing the wrapped service until a request needs it, so
@@ -34,8 +38,8 @@ type deferredDial struct {
 var _ upspin.KeyServer = (*server)(nil)
 
 // Wrap returns a KeyServer that answers Lookup from the pinned key directory
-// named by the configuration passed to Dial, and consults s for users that are
-// not pinned.
+// and the delegated key sets named by the configuration passed to Dial, and
+// consults s for users found in neither.
 //
 // It must be the outermost wrapper. In particular it must enclose, not be
 // enclosed by, key/usercache, so that a cached answer from a key server can
@@ -44,13 +48,15 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 	return &server{base: s, dd: &deferredDial{}}
 }
 
-// Lookup implements upspin.KeyServer. It first looks for a pinned record in
-// the key directory, if the configuration names one, and returns that record
-// if it is there. Only if the user is not pinned does it ask the wrapped key
-// server. A pinned record that is present but unusable is an error: the
-// lookup does not fall through to the key server, since that would let a
-// damaged or tampered record be replaced silently by whatever the key server
-// chose to return.
+// Lookup implements upspin.KeyServer. It consults three sources in turn and
+// returns the first answer: the pinned key directory, if the configuration
+// names one; the delegated key sets, if it names any; and last the wrapped key
+// server. The order is the order of authority, so that neither a delegated set
+// nor a key server, nor a cache in front of one, can shadow a pinned record.
+//
+// A pinned record that is present but unusable is an error: the lookup does
+// not fall through, since that would let a damaged or tampered record be
+// replaced silently by whatever a key server chose to return.
 func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Lookup"
 	if s.dd.dir != "" {
@@ -59,10 +65,15 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 		case err == nil:
 			return u, nil
 		case errors.Is(errors.NotExist, err):
-			// Not pinned; ask the wrapped server below.
+			// Not pinned; try the sources below.
 		default:
 			// Present but unusable; see above.
 			return nil, errors.E(op, err)
+		}
+	}
+	if s.sets != nil {
+		if u := s.sets.lookup(s.dd.config, s.dd.dir, name); u != nil {
+			return u, nil
 		}
 	}
 	if err := s.dial(); err != nil {
@@ -96,11 +107,19 @@ func (s *server) Dial(cfg upspin.Config, e upspin.Endpoint) (upspin.Service, err
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
+	paths, err := Sets(cfg)
+	if err != nil {
+		return nil, errors.E(op, err)
+	}
 	c := *s
 	c.dd = &deferredDial{
 		config:   cfg,
 		endpoint: e,
 		dir:      dir,
+	}
+	c.sets = nil
+	if len(paths) > 0 {
+		c.sets = &sets{paths: paths}
 	}
 	return &c, nil
 }

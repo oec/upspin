@@ -23,6 +23,7 @@ const keyDirSchema = `
 users:
   - name: dana@example.net
   - name: ravi@example.net
+  - name: sam@example.net
 servers:
   - name: storeserver
   - name: dirserver
@@ -35,6 +36,7 @@ domain: example.net
 const (
 	dana = upspin.UserName("dana@example.net")
 	ravi = upspin.UserName("ravi@example.net")
+	sam  = upspin.UserName("sam@example.net")
 )
 
 // TestKeyDir exercises a cluster that has no key server, to check that a
@@ -55,6 +57,19 @@ func TestKeyDir(t *testing.T) {
 		t.Fatalf("starting schema: %v", err)
 	}
 	defer schema.Stop()
+
+	// Name the delegated key set in sam's configuration. It must be done
+	// before sam runs any command, since bind keeps the key server it
+	// dials for a user and would otherwise keep one that had no set.
+	cfgFile := schema.Config(string(sam))
+	cfg, err := os.ReadFile(cfgFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg = append(cfg, []byte("keysets:\n- "+string(dana)+"/Keys\n")...)
+	if err := os.WriteFile(cfgFile, cfg, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, test := range keyDirTests(t, t.TempDir()) {
 		r := &runner{
@@ -121,6 +136,13 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 	attested := filepath.Join(tmp, "newbie.attested")
 	tampered := filepath.Join(tmp, "newbie.tampered")
 
+	// A record with no attestation at all. Publishing it in a delegated
+	// set must not be enough to make anyone believe it.
+	rogue := filepath.Join(tmp, "rogue.yaml")
+	if err := os.WriteFile(rogue, []byte(strings.Replace(record, "newbie@", "rogue@", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	return append(keyDirBasicTests, []cmdTest{
 		{
 			// dana signs a record for another user in her domain.
@@ -176,6 +198,58 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			),
 			"",
 			fail("attestation does not verify"),
+		},
+		{
+			// dana publishes a directory of records in her own name
+			// space. The owner must grant read access explicitly:
+			// a key set is not an access control file and gets no
+			// special treatment from the directory server.
+			"publish a delegated key set",
+			dana,
+			do("mkdir @/Keys"),
+			"",
+			expectNoOutput(),
+		},
+		putFile(dana, "dana@example.net/Keys/Access", "r,l: all\n*:dana@example.net\n"),
+		{
+			"put records in the set",
+			dana,
+			do(
+				"cp "+attested+" @/Keys/newbie@example.net",
+				"cp "+rogue+" @/Keys/rogue@example.net",
+				"ls @/Keys",
+			),
+			"",
+			expect("dana@example.net/Keys/newbie@example.net", "dana@example.net/Keys/rogue@example.net"),
+		},
+		{
+			// The anchor was removed above; pin it again, since a
+			// record from a set is worth nothing without one.
+			"pin the anchor again",
+			dana,
+			do("keytrust -add -anchor -force dana@example.net"),
+			"",
+			expect("pinned dana@example.net as the trust anchor for example.net"),
+		},
+		{
+			// sam has pinned neither newbie nor anything of dana's
+			// beyond the anchor, and there is no key server. The
+			// record can only have come from the delegated set.
+			"resolve a user from a delegated set",
+			sam,
+			do("user newbie@example.net"),
+			"",
+			expect("name: newbie@example.net", "# fingerprint: SHA256:"),
+		},
+		{
+			// The owner of a set carries records; she does not
+			// vouch for them. An unattested record in her set is
+			// no more believable than one from a key server.
+			"an unattested record in a set is refused",
+			sam,
+			do("user rogue@example.net"),
+			"",
+			fail("request to unassigned service"),
 		},
 		{
 			"remove the trust anchor",

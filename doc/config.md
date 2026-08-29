@@ -40,6 +40,7 @@ The keys identify settings, and there several defined:
 * `cache:` Whether to use a local store and directory cache server.
 * `secrets:` Directory holding private keys.
 * `keydir:` Directory holding pinned public keys of other users.
+* `keysets:` Upspin directories of published user records to also consult.
 * `tlscerts:` Directory holding TLS certificates.
 
 One can also specify values for flags used by various commands.
@@ -195,6 +196,28 @@ upspin user ann@example.com > $keydir/ann@example.com
 ```
 go doc upspin.io/key/trust
 ```
+
+* The **`keysets`** setting lists Upspin directories of published user
+records, each holding one file per user named for that user, which are
+consulted after `keydir` and before the key server:
+
+```
+keysets:
+ - dana@example.net/Keys
+```
+
+	A record found in one of them is used only if it is attested by a trust
+	anchor pinned in `keydir`.
+	The owner of such a directory therefore carries records; she does not
+	vouch for them, and cannot pass off a key of her own choosing.
+	To let one person speak for a domain's users, pin them as that domain's
+	trust anchor instead.
+
+	The owner must grant read access to the directory explicitly, with an
+	`Access` file; a directory of keys is not an access control file and
+	receives no special treatment from the directory server.
+	The sets are read as a snapshot and re-read periodically, so a record
+	added to one becomes visible within a few minutes rather than at once.
 
 * The **`tlscerts`** setting identifies a directory in which to locate TLS
 certificate root authorities.
