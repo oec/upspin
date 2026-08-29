@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"upspin.io/access"
+	"upspin.io/factotum"
 	"upspin.io/pack"
 	"upspin.io/path"
 	"upspin.io/upspin"
@@ -131,10 +132,10 @@ func (d *infoDirEntry) Hashes() string {
 		return h
 	}
 	for _, r := range hashes {
-		if h == "" {
+		if h != "" {
 			h += " "
 		}
-		h += fmt.Sprintf("%x...", r[:4])
+		h += factotum.FingerprintFromHash(r)
 	}
 	return h
 }

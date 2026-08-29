@@ -6,6 +6,7 @@ package factotum
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"upspin.io/upspin"
@@ -99,5 +100,41 @@ func TestSign(t *testing.T) {
 	_, err = fi.Sign([]byte("this is too long a string for p256"))
 	if err == nil {
 		t.Errorf("factotum.Sing(longstring) should have failed")
+	}
+}
+
+func TestFingerprint(t *testing.T) {
+	const (
+		pubKey = "p256\n86754568856409436056886548963722747418663925733852968840719951502625645703023\n55374006944977701639377273685946154797448684848748065688191847332792959379206\n"
+		other  = "p256\n6640270742675236934700552659758623510932789581985633007789325329362331148012\n68892645101823987570169861213316538980647268870890981023717754447508722389034\n"
+	)
+	fp := Fingerprint(upspin.PublicKey(pubKey))
+
+	// The format is OpenSSH's: "SHA256:" plus unpadded base64 of a
+	// 32-byte hash, which is 43 characters.
+	const prefix = "SHA256:"
+	if !strings.HasPrefix(fp, prefix) {
+		t.Fatalf("Fingerprint(pubKey) = %q; want prefix %q", fp, prefix)
+	}
+	if got, want := len(fp)-len(prefix), 43; got != want {
+		t.Errorf("len(fingerprint body) = %d; want %d", got, want)
+	}
+	if strings.ContainsAny(fp, "=") {
+		t.Errorf("Fingerprint(pubKey) = %q; want no base64 padding", fp)
+	}
+
+	// It must be stable, and distinguish keys. If it did neither it
+	// would be useless for comparing keys out of band.
+	if fp != Fingerprint(upspin.PublicKey(pubKey)) {
+		t.Error("Fingerprint is not deterministic")
+	}
+	if fp == Fingerprint(upspin.PublicKey(other)) {
+		t.Errorf("Fingerprint(pubKey) == Fingerprint(other) == %q", fp)
+	}
+
+	// Fingerprint must agree with FingerprintFromHash, which is what
+	// callers holding only a key hash (such as the packers) will use.
+	if got := FingerprintFromHash(KeyHash(upspin.PublicKey(pubKey))); got != fp {
+		t.Errorf("FingerprintFromHash = %q; want %q", got, fp)
 	}
 }

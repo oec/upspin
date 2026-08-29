@@ -815,6 +815,12 @@ user whose record is to be updated must be provided in the input
 record and must either be the current user or the name of another
 user whose domain is administered by the current user.
 
+The public key is also reported as a fingerprint, in a comment so
+that the output still round-trips through -put. The fingerprint is a
+short rendering of the key, in the same format used by OpenSSH, for
+comparing a key against a copy obtained by other means, such as over
+the telephone.
+
 A handy way to use the command is to edit the config file and run
 	upspin user | upspin user -put
 

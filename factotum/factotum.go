@@ -11,6 +11,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
@@ -52,6 +53,21 @@ func KeyHash(p upspin.PublicKey) []byte {
 
 // AllUsersKeyHash is the hash of upspin.AllUsersKey.
 var AllUsersKeyHash = KeyHash(upspin.AllUsersKey)
+
+// Fingerprint returns a short rendering of a public key, suitable for a person
+// to compare against another copy of the same key obtained out of band, such as
+// over the telephone. The format is the one used by OpenSSH: the literal
+// "SHA256:" followed by the unpadded base64 encoding of the key's SHA-256 hash.
+func Fingerprint(p upspin.PublicKey) string {
+	return FingerprintFromHash(KeyHash(p))
+}
+
+// FingerprintFromHash renders a key hash, as returned by KeyHash, in the same
+// format as Fingerprint. It is for callers such as the packers that hold the
+// hash of a key but not the key itself.
+func FingerprintFromHash(keyHash []byte) string {
+	return "SHA256:" + base64.RawStdEncoding.EncodeToString(keyHash)
+}
 
 // NewFromDir returns a new Factotum providing all needed private key operations,
 // loading keys from a directory containing *.upspinkey files.
