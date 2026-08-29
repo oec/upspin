@@ -57,6 +57,7 @@ Upspin commands:
 	getref
 	info
 	keygen
+	keysign
 	keytrust
 	link
 	ls
@@ -348,11 +349,48 @@ Flags:
 
 
 
+Sub-command keysign
+
+Usage: upspin keysign [-in=file] [username]
+
+Keysign writes to standard output an attested user record: the record
+for a user, followed by a signature over it made with the current
+user's key.
+
+An attested record can be pinned by anyone who has pinned the signing
+key as the trusted root for that user's domain, without their having
+to verify the user's key themselves. Signing the records of a domain's
+users is therefore how the holder of its root key spares everyone else
+the work of checking each key in it by hand.
+
+The record is read from the file named by -in, or, if -in is absent,
+looked up for the user named as the argument.
+
+Nothing here checks that the signing key is entitled to speak for the
+record's domain; that is the reader's decision, expressed by which key
+they pin as the trusted root for a domain. See the keytrust command,
+whose -add -root flags pin such a root.
+
+A typical use is to attest to a record and send the result to someone
+who has already pinned this key as a root:
+
+	upspin keysign ann@example.com > ann.attested
+
+Flags:
+  -help
+    	print more information about the command
+  -in file
+    	file holding the user record to sign (default: ask the key server)
+
+
+
 Sub-command keytrust
 
 Usage: upspin keytrust [username...]
               keytrust -add [-in=file] [-fingerprint=fp] [-force] username
+              keytrust -add -root [-domain=name] [-fingerprint=fp] [-force] username
               keytrust -remove username...
+              keytrust -remove -root domain...
 
 Keytrust manages the directory of pinned user records named by the
 keydir entry in the configuration file. A pinned record is used as it
@@ -361,9 +399,9 @@ substitute a key of its own choosing. Since an Upspin user record is
 not signed, pinning is the only way to be certain which key belongs
 to a user.
 
-With no flags, keytrust lists the pinned users and their key
-fingerprints, or prints the complete record for each user named as an
-argument.
+With no flags, keytrust lists the pinned users and the trusted roots,
+with their key fingerprints, or prints the complete record for each
+user named as an argument.
 
 With -add, keytrust pins one user. The record is read from the file
 named by -in, or, if -in is absent, from the key server. Because a
@@ -372,18 +410,33 @@ return, adding a user who is already pinned is refused; remove the old
 record first.
 
 Pinning a key that has not been verified is pointless, so -add
-requires either -fingerprint, giving the fingerprint the key must
-have, or -force to pin without checking. Obtain the fingerprint from
-its owner by some means an attacker does not control, such as over the
-telephone, and see it for a given key with
+requires one of three things. Either the record carries an attestation
+that verifies against a trusted root already pinned for its domain, in
+which case nothing more is needed; or -fingerprint gives the
+fingerprint the key must have; or -force pins the key unchecked.
+Obtain a fingerprint from its owner by some means an attacker does not
+control, such as over the telephone, and see it for a given key with
 
 	upspin user <username>
 
-With -remove, keytrust deletes the record for each user named.
+With -add and -root, keytrust pins a user as the trusted root for a
+domain: the key entitled to attest for every user in it, so that those
+users can be pinned on the strength of that one key rather than
+verified one by one. The domain defaults to the domain of the user
+being pinned, and -domain names another. A root is the key on which
+all the others rest, so it must itself be verified: -fingerprint or
+-force is always required.
+
+With -remove, keytrust deletes the record for each user named, or,
+with -root, the trusted root for each domain named.
+
+See the keysign command for producing an attested record.
 
 Flags:
   -add
     	add a pinned user record
+  -domain domain
+    	the domain a trusted root attests for (default: the root's own domain)
   -fingerprint fingerprint
     	require the key to have this fingerprint before pinning it
   -force
@@ -394,6 +447,8 @@ Flags:
     	file holding the user record to pin (default: ask the key server)
   -remove
     	remove pinned user records
+  -root
+    	the record is a trusted root, entitled to attest for a domain
 
 
 

@@ -30,6 +30,14 @@
 // or correcting a pin takes effect immediately, without restarting a server
 // whose key directory is in effect its admission list. The files are small and
 // the operating system's page cache makes the read cheap.
+//
+// Verifying every user's key by hand does not scale past a handful of them, so
+// a record may instead be attested: signed by a key that the reader has pinned
+// as entitled to speak for a domain, in the trusted-roots subdirectory of the
+// key directory. Pinning one such root for a domain is then enough to accept
+// records for every user in it. Attestations are checked at the boundary, by
+// Accept, when a record arrives from somewhere the reader does not control;
+// what is already in the key directory is trusted because it is there.
 package trust // import "upspin.io/key/trust"
 
 import (
@@ -135,6 +143,10 @@ func fileName(op errors.Op, dir string, name upspin.UserName) (string, upspin.Us
 // record it returns an error of kind errors.NotExist. A record that is present
 // but unusable is an error, never a silent absence: a corrupt or tampered pin
 // must not quietly fall through to a key server.
+//
+// A pinned record may carry an attestation, which Read parses past but does
+// not check. A record is trusted because it is pinned; an attestation is what
+// justifies pinning it in the first place, and is checked then, by Accept.
 func Read(dir string, name upspin.UserName) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Read"
 	file, clean, err := fileName(op, dir, name)
@@ -148,8 +160,12 @@ func Read(dir string, name upspin.UserName) (*upspin.User, error) {
 	if err != nil {
 		return nil, errors.E(op, clean, errors.IO, err)
 	}
+	record, _, err := Split(data)
+	if err != nil {
+		return nil, errors.E(op, clean, errors.Errorf("%s: %v", file, err))
+	}
 	u := new(upspin.User)
-	if err := yaml.Unmarshal(data, u); err != nil {
+	if err := yaml.Unmarshal(record, u); err != nil {
 		return nil, errors.E(op, clean, errors.Invalid, errors.Errorf("parsing %s: %v", file, err))
 	}
 	if u.Name != clean {
@@ -188,15 +204,40 @@ func Write(dir string, u *upspin.User) error {
 	if err := Validate(u); err != nil {
 		return errors.E(op, err)
 	}
-	file, clean, err := fileName(op, dir, u.Name)
-	if err != nil {
-		return err
-	}
 	rec := *u
+	clean, err := user.Clean(u.Name)
+	if err != nil {
+		return errors.E(op, u.Name, err)
+	}
 	rec.Name = clean
 	data, err := yaml.Marshal(rec)
 	if err != nil {
 		return errors.E(op, clean, err)
+	}
+	return Pin(dir, data)
+}
+
+// Pin stores data, a user record that may carry an attestation, as the pinned
+// record for the user it names, replacing any record already there. The record
+// is validated, but the bytes are stored as they stand, so that an attestation
+// is kept along with the record it vouches for. The directory is created if it
+// does not exist.
+func Pin(dir string, data []byte) error {
+	const op errors.Op = "key/trust.Pin"
+	record, _, err := Split(data)
+	if err != nil {
+		return errors.E(op, err)
+	}
+	u := new(upspin.User)
+	if err := yaml.Unmarshal(record, u); err != nil {
+		return errors.E(op, errors.Invalid, errors.Errorf("parsing record: %v", err))
+	}
+	if err := Validate(u); err != nil {
+		return errors.E(op, err)
+	}
+	file, clean, err := fileName(op, dir, u.Name)
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return errors.E(op, errors.IO, err)

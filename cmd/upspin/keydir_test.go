@@ -6,6 +6,9 @@ package main
 
 import (
 	"flag"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"upspin.io/upbox"
@@ -53,7 +56,7 @@ func TestKeyDir(t *testing.T) {
 	}
 	defer schema.Stop()
 
-	for _, test := range keyDirTests {
+	for _, test := range keyDirTests(t, t.TempDir()) {
 		r := &runner{
 			fs:     flag.NewFlagSet(test.name, flag.PanicOnError),
 			schema: schema,
@@ -67,7 +70,124 @@ func TestKeyDir(t *testing.T) {
 	}
 }
 
-var keyDirTests = []cmdTest{
+// saveAttested is a post function that writes the attested record on the
+// command's standard output to the file good, and a copy with the attested
+// key altered to the file bad, so that later commands can read both. The
+// files cannot be prepared before the test runs, since the attestation is
+// what the command produces.
+func saveAttested(good, bad string) func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+	return func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+		if stderr != "" {
+			t.Fatalf("%q: unexpected error:\n\t%q", cmd.name, stderr)
+		}
+		for _, word := range []string{"name: newbie@example.net", "\n---\nsignature: "} {
+			if !strings.Contains(stdout, word) {
+				t.Fatalf("%q: output did not contain %q:\n%s", cmd.name, word, stdout)
+			}
+		}
+		if err := os.WriteFile(good, []byte(stdout), 0600); err != nil {
+			t.Fatal(err)
+		}
+		// Swap a digit of the attested public key: the substitution
+		// an attestation exists to catch.
+		coord := strings.Split(newbieKey, "\n")[1]
+		tampered := strings.Replace(stdout, coord, "1"+coord[1:], 1)
+		if tampered == stdout {
+			t.Fatal("test did not modify the attested key")
+		}
+		if err := os.WriteFile(bad, []byte(tampered), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A valid p256 key, for a user who exists only in these records.
+const newbieKey = "p256\n86754568856409436056886548963722747418663925733852968840719951502625645703023\n55374006944977701639377273685946154797448684848748065688191847332792959379206\n"
+
+func keyDirTests(t *testing.T, tmp string) []cmdTest {
+	t.Helper()
+
+	// A plain record for a user that no key server knows about. It can
+	// only reach a key directory by being carried there, which is what
+	// attestation is for.
+	plain := filepath.Join(tmp, "newbie.yaml")
+	record := "name: newbie@example.net\n" +
+		"dirs:\n- remote,dir.example.net:443\n" +
+		"stores:\n- remote,store.example.net:443\n" +
+		"publickey: |\n  " + strings.ReplaceAll(strings.TrimSuffix(newbieKey, "\n"), "\n", "\n  ") + "\n"
+	if err := os.WriteFile(plain, []byte(record), 0600); err != nil {
+		t.Fatal(err)
+	}
+	attested := filepath.Join(tmp, "newbie.attested")
+	tampered := filepath.Join(tmp, "newbie.tampered")
+
+	return append(keyDirBasicTests, []cmdTest{
+		{
+			// dana signs a record for another user in her domain.
+			// Nothing checks here that she is entitled to; that is
+			// the reader's decision, made by pinning a root.
+			"attest to a record",
+			dana,
+			do("keysign -in=" + plain),
+			"",
+			saveAttested(attested, tampered),
+		},
+		{
+			// Without a root pinned for the domain there is nothing
+			// to check the attestation against, so it is refused.
+			"an attested record with no root is refused",
+			dana,
+			do("keytrust -add -in=" + attested),
+			"",
+			fail("no trusted root for example.net"),
+		},
+		{
+			// A root vouches for a whole domain, so it must itself
+			// be verified; -force stands in for that here.
+			"pin a trusted root",
+			dana,
+			do("keytrust -add -root -force dana@example.net"),
+			"",
+			expect("pinned dana@example.net as the trusted root for example.net", "SHA256:"),
+		},
+		{
+			// Now the attestation carries the record, with no
+			// fingerprint to check by hand. That is the point of
+			// the whole exercise.
+			"pin an attested record without verifying it",
+			dana,
+			do("keytrust -add -in=" + attested),
+			"",
+			expect("pinned newbie@example.net", "SHA256:", "(attested)"),
+		},
+		{
+			"the attested user resolves like any other",
+			dana,
+			do("keytrust newbie@example.net"),
+			"",
+			expect("name: newbie@example.net", "# fingerprint: SHA256:"),
+		},
+		{
+			"a tampered attested record is refused",
+			dana,
+			do(
+				"keytrust -remove newbie@example.net",
+				"keytrust -add -in="+tampered,
+			),
+			"",
+			fail("attestation does not verify"),
+		},
+		{
+			"remove the trusted root",
+			dana,
+			do("keytrust -remove -root example.net"),
+			"",
+			expect("removed the trusted root for example.net"),
+		},
+	}...)
+}
+
+var keyDirBasicTests = []cmdTest{
 	{
 		// The pinned directory is what the client resolves names from,
 		// so it must hold every user in the cluster, servers included.

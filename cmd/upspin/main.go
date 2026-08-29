@@ -85,6 +85,7 @@ var commands = map[string]func(*State, ...string){
 	"getref":             (*State).getref,
 	"info":               (*State).info,
 	"keygen":             (*State).keygen,
+	"keysign":            (*State).keysign,
 	"keytrust":           (*State).keytrust,
 	"link":               (*State).link,
 	"ls":                 (*State).ls,

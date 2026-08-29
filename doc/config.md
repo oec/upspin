@@ -178,6 +178,14 @@ upspin user ann@example.com > $keydir/ann@example.com
 	key's fingerprint before pinning it.
 	If `keydir` is not set, every user is resolved through the key server.
 
+	Verifying every key by hand does not scale, so a record may instead be
+	*attested*: signed by a key pinned as the trusted root for its domain,
+	in the `trusted-roots` subdirectory of the key directory.
+	Pinning one root for a domain is then enough to accept records for
+	every user in it, without checking each one.
+	Use `upspin keysign` to attest to a record and
+	`upspin keytrust -add -root` to pin a root.
+
 	A server may set `keydir` too, in which case the directory is in effect
 	the list of users the server will authenticate, since every directory
 	and storage method requires the caller's key to verify the request
