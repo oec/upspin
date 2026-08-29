@@ -12,6 +12,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"upspin.io/factotum"
+	"upspin.io/key/trust"
 	"upspin.io/key/usercache"
 	"upspin.io/upspin"
 	"upspin.io/user"
@@ -39,6 +40,12 @@ that the output still round-trips through -put. The fingerprint is a
 short rendering of the key, in the same format used by OpenSSH, for
 comparing a key against a copy obtained by other means, such as over
 the telephone.
+
+If the input to -put is an attested record, as written by keysign, the
+attestation is stored with the record and returned to whoever looks the
+user up. They can then believe it on the strength of the signature
+rather than of the key server. A record already stored with an
+attestation is reported as such.
 
 A handy way to use the command is to edit the config file and run
 	upspin user | upspin user -put
@@ -88,6 +95,9 @@ To install new users see the signup command.
 			// A comment, so that the output still round-trips
 			// through "upspin user -put".
 			s.Printf("# fingerprint: %s\n", factotum.Fingerprint(u.PublicKey))
+		}
+		if len(u.Attestation) > 0 {
+			s.Printf("# attested\n")
 		}
 		s.Printf("\n")
 		if name != s.Config.UserName() {
@@ -142,11 +152,20 @@ func equalEndpoints(a, b []upspin.Endpoint) bool {
 
 func (s *State) putUser(fs *flag.FlagSet, keyServer upspin.KeyServer, inFile string, force bool) {
 	data := s.ReadAll(inFile)
-	userStruct := new(upspin.User)
-	err := yaml.Unmarshal(data, userStruct)
+	// The input may be an attested record, which is the plain record
+	// followed by a signature over it; read past the signature to parse
+	// the record, and keep the whole of it to store.
+	record, attestation, err := trust.Split(data)
 	if err != nil {
+		s.Exit(err)
+	}
+	userStruct := new(upspin.User)
+	if err := yaml.Unmarshal(record, userStruct); err != nil {
 		// TODO(adg): better error message?
 		s.Exit(err)
+	}
+	if attestation != nil {
+		userStruct.Attestation = data
 	}
 	if fs.NArg() != 0 && upspin.UserName(fs.Arg(0)) != userStruct.Name {
 		s.Exitf("User name provided does not match the one read from the input file.")

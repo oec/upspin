@@ -21,3 +21,19 @@ If you encounter unexpected diffs, such as changes to the
 protoc or protoc-gen-go.
 To debug, run 'which protoc' and 'which protoc-gen-go' and check that the
 commands in your path are the ones you just installed.
+
+Note on the attestation field
+-----------------------------
+
+The attestation field of message User was added to upspin.pb.go without
+protoc, which was not available at the time. The Go struct field, its getter
+and the gzipped FileDescriptorProto in fileDescriptor0 were edited to match
+what protoc would have produced: the descriptor was decompressed, unmarshalled
+into a descriptorpb.FileDescriptorProto with the protobuf library this module
+already depends on, given the new field, and written back. The encoding is
+driven by that descriptor rather than by the struct tags, so a field present in
+one and not the other would be dropped in silence; TestUserAttestation and
+TestUserAttestationIsInDescriptor in proto_test.go exist to catch that.
+
+Regenerating this package with a real protoc should produce the same field,
+since upspin.proto declares it, and those tests should keep passing.

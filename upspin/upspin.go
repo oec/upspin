@@ -329,6 +329,21 @@ type User struct {
 
 	// PublicKey is the user's current public key.
 	PublicKey PublicKey
+
+	// Attestation, if present, is this record signed by a key that vouches
+	// for the user's domain, in the form produced by upspin.io/key/trust.
+	// It lets whoever receives the record believe it on the strength of
+	// the signature rather than of whoever handed it over, so that a key
+	// server that returns one need not be trusted.
+	//
+	// It is not part of the record the signature is made over, and is
+	// therefore excluded from the YAML encoding that is signed and that
+	// the user subcommand of the upspin command prints. It is omitted
+	// from the JSON encoding when empty, so that a record without one
+	// encodes exactly as it did before this field existed; the key
+	// server's storage and its published transaction log are both JSON,
+	// and the log's hashes chain over those bytes.
+	Attestation []byte `json:",omitempty" yaml:"-"`
 }
 
 // The KeyServer interface provides access to public information about users.

@@ -154,7 +154,8 @@ func Sign(f upspin.Factotum, u *upspin.User) ([]byte, error) {
 }
 
 // Verify checks the attestation in data against key and returns the record it
-// attests to. It fails if data carries no attestation.
+// attests to, with the attestation carried on it. It fails if data carries no
+// attestation.
 func Verify(data []byte, key upspin.PublicKey) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Verify"
 	record, sig, err := Split(data)
@@ -174,6 +175,11 @@ func Verify(data []byte, key upspin.PublicKey) (*upspin.User, error) {
 	if err := Validate(u); err != nil {
 		return nil, errors.E(op, err)
 	}
+	// Carry the attestation on the record it vouches for. It is not part
+	// of what the signature covers, and so is not in the parsed record,
+	// but a record that arrived with evidence should keep it: whoever
+	// receives it next can check it too, or pass it on.
+	u.Attestation = data
 	return u, nil
 }
 
@@ -182,6 +188,11 @@ func Verify(data []byte, key upspin.PublicKey) (*upspin.User, error) {
 // from somewhere the reader does not control. It fails if the record carries
 // no attestation, if no anchor is pinned for the record's domain, or if the
 // signature does not verify under that anchor.
+//
+// The first two failures are of kind errors.NotExist and mean only that the
+// record cannot be believed on its own account; the caller may still have some
+// other reason to accept it. Any other failure means the record was offered
+// with a signature that does not hold, and should be treated as hostile.
 func Accept(dir string, data []byte) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Accept"
 	record, sig, err := Split(data)
@@ -189,7 +200,7 @@ func Accept(dir string, data []byte) (*upspin.User, error) {
 		return nil, errors.E(op, err)
 	}
 	if sig == nil {
-		return nil, errors.E(op, errors.Invalid, "record carries no attestation")
+		return nil, errors.E(op, errors.NotExist, "record carries no attestation")
 	}
 	// Read the name first, to learn which anchor should have signed it. The
 	// record is not trusted until the signature has been checked; nothing
@@ -204,7 +215,11 @@ func Accept(dir string, data []byte) (*upspin.User, error) {
 	}
 	anchor, err := ReadAnchor(dir, domain)
 	if err != nil {
-		return nil, errors.E(op, errors.Errorf("no trust anchor for %s: %v", domain, err))
+		// Keep the NotExist kind, so that a caller can tell "no anchor
+		// is pinned for this domain", which is ordinary, from "the
+		// signature does not verify", which is not.
+		return nil, errors.E(op, errors.NotExist,
+			errors.Errorf("no trust anchor for %s: %v", domain, err))
 	}
 	attested, err := Verify(data, anchor.PublicKey)
 	if err != nil {

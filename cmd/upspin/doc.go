@@ -977,6 +977,12 @@ short rendering of the key, in the same format used by OpenSSH, for
 comparing a key against a copy obtained by other means, such as over
 the telephone.
 
+If the input to -put is an attested record, as written by keysign, the
+attestation is stored with the record and returned to whoever looks the
+user up. They can then believe it on the strength of the signature
+rather than of the key server. A record already stored with an
+attestation is reported as such.
+
 A handy way to use the command is to edit the config file and run
 	upspin user | upspin user -put
 

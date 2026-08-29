@@ -82,6 +82,12 @@ message User {
     repeated Endpoint dirs = 2;
     repeated Endpoint stores = 3;
     string public_key = 4;
+    // Attestation, if present, is this record signed by the key that
+    // vouches for the user's domain, in the form produced by
+    // upspin.io/key/trust. It lets a client believe a key server's
+    // answer on the strength of the signature rather than of the
+    // server. See the Attestation field of upspin.User.
+    bytes attestation = 5;
 }
 
 message KeyLookupRequest {

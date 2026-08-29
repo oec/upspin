@@ -60,6 +60,10 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 // wrapped key server. The order is the order of authority, so that nothing
 // found further down, nor a cache in front of it, can shadow a pinned record.
 //
+// An answer from the wrapped key server that carries an attestation is checked
+// against the pinned trust anchors, and the attested record used in its place.
+// A key server that attests to what it serves therefore need not be trusted.
+//
 // A pinned record that is present but unusable is an error: the lookup does
 // not fall through, since that would let a damaged or tampered record be
 // replaced silently by whatever a key server chose to return.
@@ -97,7 +101,45 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
+	if err := s.checkAttestation(u); err != nil {
+		return nil, errors.E(op, err)
+	}
 	return u, nil
+}
+
+// checkAttestation inspects the attestation on a record from the wrapped key
+// server. A key server is otherwise an unconditionally trusted party: it can
+// return any key for any user, and the client will wrap the keys of the files
+// it shares to whatever it is given. An attestation removes that trust for the
+// records that carry one, since it is made by a key the reader pinned as the
+// anchor for the user's domain, not by the server.
+//
+// A record whose attestation verifies replaces the one the server sent, so
+// that only signed fields are used. A record with no attestation, or one for a
+// domain with no anchor pinned, is left as it is: it is no more and no less
+// believable than a key server's answer has always been. A record offered with
+// a signature that does not hold is refused outright; nothing honest produces
+// one.
+func (s *server) checkAttestation(u *upspin.User) error {
+	if s.dd.dir == "" || len(u.Attestation) == 0 {
+		return nil
+	}
+	attested, err := Accept(s.dd.dir, u.Attestation)
+	if err != nil {
+		if errors.Is(errors.NotExist, err) {
+			// No anchor pinned for this domain, so there is
+			// nothing to check the signature against.
+			return nil
+		}
+		return errors.E(u.Name, errors.Errorf(
+			"the key server offered an attestation that does not verify: %v", err))
+	}
+	if attested.Name != u.Name {
+		return errors.E(u.Name, errors.Invalid, errors.Errorf(
+			"the key server offered an attestation for %s", attested.Name))
+	}
+	*u = *attested
+	return nil
 }
 
 // checkStale reports an error if a pinned record disagrees with one that has

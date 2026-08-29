@@ -205,6 +205,14 @@ longer hold, and neither party is told.
 for that user now and reports any that disagree; a lookup that already holds a
 published record disagreeing with a pin fails rather than answering with the
 stale one.
+
+A key server may itself return an attestation, and one that does need not be
+trusted either: its answer is checked against the reader's anchors and the
+signed record used in place of what it sent, so it can no longer substitute a
+key of its own.
+Attest to a record with `upspin keysign` and publish it with `upspin user
+-put`; a reader with no anchor pinned for the domain is unaffected and
+believes the server as before.
 See `go doc upspin.io/key/trust` and the config file documentation.
 
 As far as Upspin is concerned, a user is an email address, authenticated by an

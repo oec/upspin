@@ -247,3 +247,85 @@ func TestStaleCheckNeverFetches(t *testing.T) {
 		t.Error("checking a pinned record provoked a fetch of the delegated sets")
 	}
 }
+
+// TestKeyServerAttestation covers what a signed record on the wire is for. A
+// key server is otherwise believed absolutely: it can return any key for any
+// user, and a client will wrap the keys of the files it shares to whatever it
+// is handed. An attestation moves that trust to a key the reader pinned.
+func TestKeyServerAttestation(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteAnchor(dir, "example.com", annUser()); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := anchorFactotum(t)
+	attested, err := Sign(f, attestedUser()) // carol@example.com, holding bobKey
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// What the key server returns: the right user, but with a key of the
+	// server's choosing, and the genuine attestation attached. The
+	// attested record must win, so the substitution fails.
+	served := func() *upspin.User {
+		return &upspin.User{
+			Name:        "carol@example.com",
+			Dirs:        []upspin.Endpoint{{Transport: upspin.Remote, NetAddr: "dir.example.com:443"}},
+			Stores:      []upspin.Endpoint{{Transport: upspin.Remote, NetAddr: "store.example.com:443"}},
+			PublicKey:   annKey, // not the attested key
+			Attestation: attested,
+		}
+	}
+
+	t.Run("attested record replaces what the server sent", func(t *testing.T) {
+		ks, _ := dial(t, dir, map[upspin.UserName]*upspin.User{"carol@example.com": served()})
+		got, err := ks.Lookup("carol@example.com")
+		if err != nil {
+			t.Fatalf("Lookup: %v", err)
+		}
+		if got.PublicKey != bobKey {
+			t.Errorf("Lookup = %q; want the attested key, not the key server's", got.PublicKey)
+		}
+	})
+
+	t.Run("an attestation that does not verify is refused", func(t *testing.T) {
+		u := served()
+		// Alter a digit of the attested key: a signature over the
+		// record no longer holds.
+		coord := strings.Split(string(bobKey), "\n")[1]
+		u.Attestation = []byte(strings.Replace(string(attested), coord, "1"+coord[1:], 1))
+		ks, _ := dial(t, dir, map[upspin.UserName]*upspin.User{"carol@example.com": u})
+		if _, err := ks.Lookup("carol@example.com"); err == nil {
+			t.Fatal("Lookup accepted an attestation that does not verify")
+		} else if !strings.Contains(err.Error(), "does not verify") {
+			t.Errorf("Lookup error = %v; want it to say the attestation does not verify", err)
+		}
+	})
+
+	t.Run("no anchor pinned leaves the record as it was", func(t *testing.T) {
+		// With nothing pinned for the domain there is nothing to check
+		// against, so the server's answer is as good, and as bad, as
+		// it has always been.
+		bare := t.TempDir()
+		ks, _ := dial(t, bare, map[upspin.UserName]*upspin.User{"carol@example.com": served()})
+		got, err := ks.Lookup("carol@example.com")
+		if err != nil {
+			t.Fatalf("Lookup: %v", err)
+		}
+		if got.PublicKey != annKey {
+			t.Errorf("Lookup = %q; want the key server's own answer", got.PublicKey)
+		}
+	})
+
+	t.Run("a record with no attestation is unaffected", func(t *testing.T) {
+		u := served()
+		u.Attestation = nil
+		ks, _ := dial(t, dir, map[upspin.UserName]*upspin.User{"carol@example.com": u})
+		got, err := ks.Lookup("carol@example.com")
+		if err != nil {
+			t.Fatalf("Lookup: %v", err)
+		}
+		if got.PublicKey != annKey {
+			t.Errorf("Lookup = %q; want the key server's own answer", got.PublicKey)
+		}
+	})
+}

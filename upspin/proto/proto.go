@@ -159,20 +159,22 @@ func PublicKeys(upk []upspin.PublicKey) []string {
 // UpspinUser converts a proto.User to upspin.User.
 func UpspinUser(user *User) *upspin.User {
 	return &upspin.User{
-		Name:      upspin.UserName(user.Name),
-		Dirs:      UpspinEndpoints(user.Dirs),
-		Stores:    UpspinEndpoints(user.Stores),
-		PublicKey: upspin.PublicKey(user.PublicKey),
+		Name:        upspin.UserName(user.Name),
+		Dirs:        UpspinEndpoints(user.Dirs),
+		Stores:      UpspinEndpoints(user.Stores),
+		PublicKey:   upspin.PublicKey(user.PublicKey),
+		Attestation: user.Attestation,
 	}
 }
 
 // UserProto converts an upspin.User to a proto.User.
 func UserProto(user *upspin.User) *User {
 	return &User{
-		Name:      string(user.Name),
-		Dirs:      Endpoints(user.Dirs),
-		Stores:    Endpoints(user.Stores),
-		PublicKey: string(user.PublicKey),
+		Name:        string(user.Name),
+		Dirs:        Endpoints(user.Dirs),
+		Stores:      Endpoints(user.Stores),
+		PublicKey:   string(user.PublicKey),
+		Attestation: user.Attestation,
 	}
 }
 
