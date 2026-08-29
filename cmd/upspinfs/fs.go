@@ -1018,8 +1018,21 @@ func (n *node) Symlink(ctx gContext.Context, req *fuse.SymlinkRequest) (fs.Node,
 
 	}
 	log.Debug.Printf("Symlink target %q", upspinPath)
-	nn := n.f.allocNode(n, req.NewName, os.ModeSymlink|unixPermissions, uint64(len(upspinPath)), time.Now())
+	nn := n.f.allocNode(n, req.NewName, os.ModeSymlink|unixPermissions, 0, time.Now())
 	nn.link = upspinPath
+	// The size of a symlink is the length of its contents, which is what
+	// Readlink returns: the target relative to the link, not the Upspin
+	// path. lstatSize computes it that way for a link the directory server
+	// reports, and a link created here must agree. Otherwise the size is
+	// wrong until the watcher happens to correct it, so a program that
+	// creates a symlink and stats it straight away sees a size that no
+	// later stat will report.
+	hostPath, err := nn.upspinPathToHostPath(upspinPath)
+	if err != nil {
+		return nil, e2e(errors.E(op, n.uname, err))
+	}
+	nn.attr.Size = uint64(len(hostPath))
+	nn.attr.Blocks = (nn.attr.Size + 511) / 512
 	if err := n.f.cache.putRedirect(nn, upspinPath); err != nil {
 		return nil, e2e(errors.E(op, n.uname, err))
 	}
