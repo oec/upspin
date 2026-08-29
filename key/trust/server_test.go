@@ -7,6 +7,7 @@ package trust
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"upspin.io/config"
@@ -162,5 +163,87 @@ func TestPutAddressesKeyServer(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ann@example.com")); err == nil {
 		t.Error("Put wrote to the key directory")
+	}
+}
+
+// TestStalePinIsRefused covers the answer to the problem that nothing in
+// Upspin pushes a key change. A record pinned before its owner rotated names a
+// key they no longer hold; wrapping a file to it loses them access, and
+// nothing says so. When a record published under a trust anchor is already in
+// hand and disagrees, the lookup fails instead.
+func TestStalePinIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	pinned := annUser() // ann@example.com, holding annKey
+	if err := Write(dir, pinned); err != nil {
+		t.Fatal(err)
+	}
+	rotated := annUser()
+	rotated.PublicKey = bobKey
+
+	for _, test := range []struct {
+		name string
+		// install puts a published record where a lookup will already
+		// have it, without any fetching.
+		install func(s *server, u *upspin.User)
+	}{
+		{"delegated set", func(s *server, u *upspin.User) {
+			s.sets = &sets{users: map[upspin.UserName]*upspin.User{u.Name: u}}
+		}},
+		{"discovery", func(s *server, u *upspin.User) {
+			s.discovery = &discovery{domains: map[string]*published{
+				"example.com": {users: map[upspin.UserName]*upspin.User{u.Name: u}},
+			}}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			svc, _ := dial(t, dir, nil)
+			s := svc.(*server)
+
+			// Agreement is silent: the pin is used, as always.
+			test.install(s, pinned)
+			got, err := s.Lookup(pinned.Name)
+			if err != nil {
+				t.Fatalf("Lookup with an agreeing record: %v", err)
+			}
+			if got.PublicKey != annKey {
+				t.Errorf("Lookup = %q; want the pinned key", got.PublicKey)
+			}
+
+			// Disagreement is not.
+			test.install(s, rotated)
+			if _, err := s.Lookup(pinned.Name); err == nil {
+				t.Fatal("Lookup answered with a pinned record known to be superseded")
+			} else if !strings.Contains(err.Error(), "out of date") {
+				t.Errorf("Lookup error = %v; want it to say the pin is out of date", err)
+			}
+		})
+	}
+}
+
+// TestStaleCheckNeverFetches makes sure the check costs nothing: it must look
+// only at records already in hand, never provoke a fetch of its own, or every
+// lookup of a pinned user would reach the network and pinning would buy
+// nothing.
+func TestStaleCheckNeverFetches(t *testing.T) {
+	dir := t.TempDir()
+	if err := Write(dir, annUser()); err != nil {
+		t.Fatal(err)
+	}
+	svc, _ := dial(t, dir, nil)
+	s := svc.(*server)
+
+	// A set that has never been read, and whose path could not be read
+	// here in any case: peeking at it must not try.
+	s.sets = &sets{paths: []upspin.PathName{"nobody@example.net/Keys"}}
+	s.discovery = &discovery{}
+
+	if _, err := s.Lookup("ann@example.com"); err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	s.sets.mu.Lock()
+	tried := !s.sets.lastTry.IsZero()
+	s.sets.mu.Unlock()
+	if tried {
+		t.Error("checking a pinned record provoked a fetch of the delegated sets")
 	}
 }

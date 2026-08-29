@@ -208,6 +208,23 @@ func (d *discovery) lookup(cfg upspin.Config, keyDir string, name upspin.UserNam
 	return u
 }
 
+// peek returns the record discovery has already found for name, if any. It
+// never fetches, so it is free to call on a lookup that has already been
+// answered from the pinned key directory.
+func (d *discovery) peek(name upspin.UserName) *upspin.User {
+	domain, err := domainOf(name)
+	if err != nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	p := d.domains[domain]
+	if p == nil {
+		return nil
+	}
+	return p.users[name]
+}
+
 // fetchDomain returns everything a domain publishes in a bundle, or nil if it
 // publishes no bundle that can be read.
 func fetchDomain(cfg upspin.Config, keyDir, domain string, want upspin.UserName) map[upspin.UserName]*upspin.User {

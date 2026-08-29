@@ -131,6 +131,15 @@ func (s *sets) lookup(cfg upspin.Config, keyDir string, name upspin.UserName) *u
 	return users[name]
 }
 
+// peek returns the record a set publishes for name if the snapshot already
+// holds one. It never fetches, so it is free to call on a lookup that has
+// already been answered from the pinned key directory.
+func (s *sets) peek(name upspin.UserName) *upspin.User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.users[name]
+}
+
 // load reads every delegated set and returns the records it accepts from them,
 // or nil if no set could be read at all. Earlier sets win, so that the order
 // in the configuration decides between two sets that publish the same user.
@@ -214,4 +223,60 @@ func readSet(cfg upspin.Config, keyDir string, set upspin.PathName) (map[upspin.
 		users[name] = u
 	}
 	return users, nil
+}
+
+// A Checker looks up records in the sources other than the pinned key
+// directory, so that a pinned record can be compared with what its owner
+// publishes now. Nothing pushes a key change in Upspin, so a pin can quietly
+// outlive the key it names; a check is how that is found deliberately rather
+// than by the loss of access it eventually causes.
+type Checker struct {
+	cfg       upspin.Config
+	dir       string
+	sets      *sets
+	discovery *discovery
+}
+
+// NewChecker returns a Checker for the sources the configuration names.
+func NewChecker(cfg upspin.Config) (*Checker, error) {
+	const op errors.Op = "key/trust.NewChecker"
+	dir, err := Dir(cfg)
+	if err != nil {
+		return nil, errors.E(op, err)
+	}
+	paths, err := Sets(cfg)
+	if err != nil {
+		return nil, errors.E(op, err)
+	}
+	c := &Checker{cfg: cfg, dir: dir}
+	if len(paths) > 0 {
+		c.sets = &sets{paths: paths}
+	}
+	if Discovery(cfg) {
+		c.discovery = &discovery{}
+	}
+	return c, nil
+}
+
+// Sources reports whether any source other than the pinned key directory is
+// configured. With none there is nothing to check a pin against.
+func (c *Checker) Sources() bool {
+	return c.sets != nil || c.discovery != nil
+}
+
+// Published returns the record published for name by a delegated key set or by
+// the user's own domain, or nil if none is. The pinned key directory is not
+// consulted: the point of a check is to see what the other sources say.
+func (c *Checker) Published(name upspin.UserName) *upspin.User {
+	if c.sets != nil {
+		if u := c.sets.lookup(c.cfg, c.dir, name); u != nil {
+			return u
+		}
+	}
+	if c.discovery != nil {
+		if u := c.discovery.lookup(c.cfg, c.dir, name); u != nil {
+			return u
+		}
+	}
+	return nil
 }

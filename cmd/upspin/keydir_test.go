@@ -85,6 +85,25 @@ func TestKeyDir(t *testing.T) {
 	}
 }
 
+// expectAndFail is a post function for a command that both reports on standard
+// output and exits with a complaint: keytrust -check lists what it found and
+// then says that something is wrong.
+func expectAndFail(errStr string, words ...string) func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+	return func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+		if !strings.Contains(stderr, errStr) {
+			t.Fatalf("%q: expected %q on standard error; got %q", cmd.name, errStr, stderr)
+		}
+		out := stdout
+		for _, word := range words {
+			i := strings.Index(out, word)
+			if i < 0 {
+				t.Fatalf("%q: output did not contain %q:\n%s", cmd.name, word, stdout)
+			}
+			out = out[i:]
+		}
+	}
+}
+
 // saveAttested is a post function that writes the attested record on the
 // command's standard output to the file good, and a copy with the attested
 // key altered to the file bad, so that later commands can read both. The
@@ -116,7 +135,10 @@ func saveAttested(good, bad string) func(t *testing.T, r *runner, cmd *cmdTest, 
 	}
 }
 
-// A valid p256 key, for a user who exists only in these records.
+// Two valid p256 keys, for a user who exists only in these records. The
+// second stands for the key after a rotation.
+const rotatedKey = "p256\n6640270742675236934700552659758623510932789581985633007789325329362331148012\n68892645101823987570169861213316538980647268870890981023717754447508722389034\n"
+
 const newbieKey = "p256\n86754568856409436056886548963722747418663925733852968840719951502625645703023\n55374006944977701639377273685946154797448684848748065688191847332792959379206\n"
 
 func keyDirTests(t *testing.T, tmp string) []cmdTest {
@@ -140,6 +162,17 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 	// set must not be enough to make anyone believe it.
 	rogue := filepath.Join(tmp, "rogue.yaml")
 	if err := os.WriteFile(rogue, []byte(strings.Replace(record, "newbie@", "rogue@", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same user with a different key, standing for a record pinned
+	// before its owner rotated.
+	stale := filepath.Join(tmp, "newbie.stale")
+	staleRecord := strings.Replace(record,
+		strings.Split(newbieKey, "\n")[1], strings.Split(rotatedKey, "\n")[1], 1)
+	staleRecord = strings.Replace(staleRecord,
+		strings.Split(newbieKey, "\n")[2], strings.Split(rotatedKey, "\n")[2], 1)
+	if err := os.WriteFile(stale, []byte(staleRecord), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,6 +221,16 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			do("keytrust newbie@example.net"),
 			"",
 			expect("name: newbie@example.net", "# fingerprint: SHA256:"),
+		},
+		{
+			// A pinned record is exported as it stands, attestation
+			// and all, so that it can be passed on to someone else
+			// who need not then check its fingerprint.
+			"export a pinned record with its attestation",
+			dana,
+			do("keytrust -export newbie@example.net"),
+			"",
+			expect("name: newbie@example.net", "---", "signature: "),
 		},
 		{
 			"a tampered attested record is refused",
@@ -250,6 +293,48 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			do("user rogue@example.net"),
 			"",
 			fail("request to unassigned service"),
+		},
+		{
+			// Pin a record for a user the set also publishes, but
+			// holding a different key: what is left behind when
+			// the user rotates and nobody tells the people who
+			// pinned the old one.
+			"pin a record that the set has since superseded",
+			dana,
+			do("keytrust -add -force -in=" + stale),
+			"",
+			expect("pinned newbie@example.net"),
+		},
+		{
+			// The set's record is attested by the anchor, so it is
+			// the domain speaking; the pin is simply old.
+			"check reports the stale pin",
+			sam,
+			do("keytrust -check newbie@example.net"),
+			"",
+			expectAndFail("out of date",
+				"newbie@example.net", "STALE", "pinned:", "published:"),
+		},
+		{
+			// And a lookup refuses rather than handing back a key
+			// its owner no longer holds, which would be wrapped
+			// into any file shared with them, silently.
+			"a superseded pin is not used",
+			sam,
+			do("user newbie@example.net"),
+			"",
+			fail("pinned record is out of date"),
+		},
+		{
+			"check passes once the pin is corrected",
+			sam,
+			do(
+				"keytrust -remove newbie@example.net",
+				"keytrust -add -in="+attested,
+				"keytrust -check newbie@example.net",
+			),
+			"",
+			expect("removed newbie@example.net", "pinned newbie@example.net", "(attested)", "\tok"),
 		},
 		{
 			"remove the trust anchor",

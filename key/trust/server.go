@@ -69,6 +69,9 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 		u, err := Read(s.dd.dir, name)
 		switch {
 		case err == nil:
+			if err := s.checkStale(u); err != nil {
+				return nil, errors.E(op, err)
+			}
 			return u, nil
 		case errors.Is(errors.NotExist, err):
 			// Not pinned; try the sources below.
@@ -95,6 +98,56 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 		return nil, errors.E(op, err)
 	}
 	return u, nil
+}
+
+// checkStale reports an error if a pinned record disagrees with one that has
+// already been found for the same user in a delegated key set or by discovery.
+// Such a record is attested by the trust anchor the reader pinned for the
+// user's domain, so it says the key has changed since the record was pinned;
+// nothing else could produce it.
+//
+// This matters because nothing in Upspin pushes a key change. A peer holding a
+// record from before a rotation will wrap the keys of the files it shares to a
+// key its owner no longer holds, and neither of them will be told: the loss of
+// access appears later, as a file that cannot be read. Refusing to answer with
+// a pinned record that is known to be superseded turns that silence into a
+// message.
+//
+// Only records already in hand are consulted, so this costs nothing and finds
+// nothing that has not been fetched for some other reason. Use the -check flag
+// of the keytrust subcommand to look deliberately.
+func (s *server) checkStale(pinned *upspin.User) error {
+	for _, published := range []*upspin.User{
+		peek(s.sets, pinned.Name),
+		peekDiscovery(s.discovery, pinned.Name),
+	} {
+		if published == nil || published.PublicKey == pinned.PublicKey {
+			continue
+		}
+		return errors.E(errors.Invalid, pinned.Name, errors.Str(
+			"the pinned key is not the key now published for this user and attested by "+
+				"the trust anchor for their domain: the pinned record is out of date. "+
+				"Check it with 'upspin keytrust -check' and replace it."))
+	}
+	return nil
+}
+
+// peek returns what a delegated key set has already been found to publish for
+// name, tolerating a nil set.
+func peek(s *sets, name upspin.UserName) *upspin.User {
+	if s == nil {
+		return nil
+	}
+	return s.peek(name)
+}
+
+// peekDiscovery returns what discovery has already found for name, tolerating
+// a nil discovery.
+func peekDiscovery(d *discovery, name upspin.UserName) *upspin.User {
+	if d == nil {
+		return nil
+	}
+	return d.peek(name)
 }
 
 // Put implements upspin.KeyServer. Pinning is a local operation, performed by

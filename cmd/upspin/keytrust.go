@@ -57,6 +57,20 @@ all the others rest, so it must itself be verified: -fingerprint or
 With -remove, keytrust deletes the record for each user named, or,
 with -anchor, the trust anchor for each domain named.
 
+With -check, keytrust compares each pinned record, or each of those
+named as arguments, against what is published for that user now by the
+delegated key sets and by the user's own domain, and reports any that
+disagree. Nothing in Upspin pushes a key change, so a pinned record can
+outlive the key it names; until it is replaced, files shared with that
+user are wrapped to a key they no longer hold, and neither party is
+told. A check is how that is found on purpose rather than by the loss
+of access it causes. It needs a keysets entry, or keydiscovery, in the
+configuration; with neither there is nothing to compare against.
+
+With -export, keytrust writes the pinned record for each user named to
+standard output, as it is stored and including its attestation, so that
+it can be passed on to someone else.
+
 See the keysign command for producing an attested record.
 `
 	fs := flag.NewFlagSet("keytrust", flag.ExitOnError)
@@ -67,15 +81,19 @@ See the keysign command for producing an attested record.
 	inFile := fs.String("in", "", "`file` holding the user record to pin (default: ask the key server)")
 	fingerprint := fs.String("fingerprint", "", "require the key to have this `fingerprint` before pinning it")
 	force := fs.Bool("force", false, "pin the key without verifying its fingerprint")
+	check := fs.Bool("check", false, "report pinned records that disagree with what is published now")
+	export := fs.Bool("export", false, "write pinned records, with their attestations, to standard output")
 	s.ParseFlags(fs, args, help,
 		"keytrust [username...]\n"+
 			"              keytrust -add [-in=file] [-fingerprint=fp] [-force] username\n"+
 			"              keytrust -add -anchor [-domain=name] [-fingerprint=fp] [-force] username\n"+
 			"              keytrust -remove username...\n"+
-			"              keytrust -remove -anchor domain...")
+			"              keytrust -remove -anchor domain...\n"+
+			"              keytrust -check [username...]\n"+
+			"              keytrust -export username...")
 
-	if *add && *remove {
-		s.Exitf("cannot use -add and -remove together")
+	if n := count(*add, *remove, *check, *export); n > 1 {
+		s.Exitf("-add, -remove, -check and -export are mutually exclusive")
 	}
 	dir, err := trust.Dir(s.Config)
 	if err != nil {
@@ -88,6 +106,26 @@ See the keysign command for producing an attested record.
 	switch {
 	case *add:
 		s.keytrustAdd(fs, dir, *inFile, *fingerprint, *force, *anchor, *domain)
+	case *check:
+		if *inFile != "" || *fingerprint != "" || *force || *anchor || *domain != "" {
+			s.Exitf("-check takes only user names")
+		}
+		s.keytrustCheck(fs, dir)
+	case *export:
+		if fs.NArg() == 0 {
+			usageAndExit(fs)
+		}
+		if *inFile != "" || *fingerprint != "" || *force || *anchor || *domain != "" {
+			s.Exitf("-export takes only user names")
+		}
+		for i := 0; i < fs.NArg(); i++ {
+			data, err := trust.ReadRaw(dir, s.cleanUserName(fs.Arg(i)))
+			if err != nil {
+				s.Fail(err)
+				continue
+			}
+			s.Printf("%s", data)
+		}
 	case *remove:
 		if fs.NArg() == 0 {
 			usageAndExit(fs)
@@ -101,6 +139,97 @@ See the keysign command for producing an attested record.
 			s.Exitf("-in, -fingerprint, -force, -anchor and -domain are only used with -add or -remove")
 		}
 		s.keytrustList(fs, dir)
+	}
+}
+
+// count returns the number of the flags that are set.
+func count(flags ...bool) int {
+	n := 0
+	for _, f := range flags {
+		if f {
+			n++
+		}
+	}
+	return n
+}
+
+// keytrustCheck compares pinned records with what is published for those users
+// now, and reports any that disagree.
+func (s *State) keytrustCheck(fs *flag.FlagSet, dir string) {
+	checker, err := trust.NewChecker(s.Config)
+	if err != nil {
+		s.Exit(err)
+	}
+	if !checker.Sources() {
+		s.Exitf("nothing to check against: the configuration names no %s and does not set %s",
+			trust.SetsConfigKey, trust.DiscoveryConfigKey)
+	}
+
+	// What to check: the users named, or everything pinned, anchors as
+	// well, since an anchor going stale is the worse failure of the two.
+	type pin struct {
+		name   upspin.UserName
+		anchor string // the domain, if this is a trust anchor
+	}
+	var pins []pin
+	if fs.NArg() > 0 {
+		for i := 0; i < fs.NArg(); i++ {
+			pins = append(pins, pin{name: s.cleanUserName(fs.Arg(i))})
+		}
+	} else {
+		names, err := trust.List(dir)
+		if err != nil {
+			s.Exit(err)
+		}
+		for _, name := range names {
+			pins = append(pins, pin{name: name})
+		}
+		domains, err := trust.ListAnchors(dir)
+		if err != nil {
+			s.Exit(err)
+		}
+		for _, domain := range domains {
+			u, err := trust.ReadAnchor(dir, domain)
+			if err != nil {
+				s.Fail(err)
+				continue
+			}
+			pins = append(pins, pin{name: u.Name, anchor: domain})
+		}
+	}
+
+	stale := 0
+	for _, p := range pins {
+		var pinned *upspin.User
+		var err error
+		if p.anchor != "" {
+			pinned, err = trust.ReadAnchor(dir, p.anchor)
+		} else {
+			pinned, err = trust.Read(dir, p.name)
+		}
+		if err != nil {
+			s.Fail(err)
+			continue
+		}
+		what := string(p.name)
+		if p.anchor != "" {
+			what += " (anchor for " + p.anchor + ")"
+		}
+		published := checker.Published(p.name)
+		switch {
+		case published == nil:
+			s.Printf("%s\tnot published\n", what)
+		case published.PublicKey == pinned.PublicKey:
+			s.Printf("%s\tok\n", what)
+		default:
+			stale++
+			s.Printf("%s\tSTALE\n\tpinned:    %s\n\tpublished: %s\n",
+				what, factotum.Fingerprint(pinned.PublicKey), factotum.Fingerprint(published.PublicKey))
+		}
+	}
+	if stale > 0 {
+		s.Failf("%d pinned record(s) are out of date; replace each with "+
+			"'upspin keytrust -remove <user>' then 'upspin keytrust -add <user>'", stale)
 	}
 }
 

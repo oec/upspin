@@ -404,6 +404,8 @@ Usage: upspin keytrust [username...]
               keytrust -add -anchor [-domain=name] [-fingerprint=fp] [-force] username
               keytrust -remove username...
               keytrust -remove -anchor domain...
+              keytrust -check [username...]
+              keytrust -export username...
 
 Keytrust manages the directory of pinned user records named by the
 keydir entry in the configuration file. A pinned record is used as it
@@ -443,6 +445,20 @@ all the others rest, so it must itself be verified: -fingerprint or
 With -remove, keytrust deletes the record for each user named, or,
 with -anchor, the trust anchor for each domain named.
 
+With -check, keytrust compares each pinned record, or each of those
+named as arguments, against what is published for that user now by the
+delegated key sets and by the user's own domain, and reports any that
+disagree. Nothing in Upspin pushes a key change, so a pinned record can
+outlive the key it names; until it is replaced, files shared with that
+user are wrapped to a key they no longer hold, and neither party is
+told. A check is how that is found on purpose rather than by the loss
+of access it causes. It needs a keysets entry, or keydiscovery, in the
+configuration; with neither there is nothing to compare against.
+
+With -export, keytrust writes the pinned record for each user named to
+standard output, as it is stored and including its attestation, so that
+it can be passed on to someone else.
+
 See the keysign command for producing an attested record.
 
 Flags:
@@ -450,8 +466,12 @@ Flags:
     	add a pinned user record
   -anchor
     	the record is a trust anchor, entitled to attest for a domain
+  -check
+    	report pinned records that disagree with what is published now
   -domain domain
     	the domain a trust anchor attests for (default: the anchor's own domain)
+  -export
+    	write pinned records, with their attestations, to standard output
   -fingerprint fingerprint
     	require the key to have this fingerprint before pinning it
   -force
@@ -677,6 +697,12 @@ It registers the user created by 'setupdomain' domain with the key server,
 copies the configuration files from $where/$domain to the upspinserver and
 restarts it, puts the Writers file, and makes the root for the calling user.
 
+If the configuration names a keydir, the server user is also pinned there,
+so that it can be resolved without a key server. If there is no key server
+at all, that is the only place it is recorded, and the record must reach
+the server and its users by some other means; 'upspin keytrust -export'
+writes it out for that purpose.
+
 The calling user and the server user are included in the Writers file by
 default (giving them write access to the store and directory). You may specify
 additional writers with the -writers flag. For instance, if you want all users
@@ -849,6 +875,18 @@ recreate or reuse prior keys.
 
 The -signuponly flag tells signup to skip the generation of the configuration
 file and keys and only send the signup request to the key server.
+
+Signup needs a key server. A configuration that instead pins the keys it
+trusts, with a keydir entry, has no signing up to do: there is no register
+to be entered in. Generate the keys and configuration file with keygen,
+write out the record for the new user with
+
+	upspin user > me.yaml
+
+and give that file to the people who are to trust it, who pin it with
+'upspin keytrust -add -in=me.yaml'. If the domain has a trust anchor,
+attesting to the record with 'upspin keysign' saves them from checking its
+fingerprint one by one. See the keytrust and keysign commands.
 
 Flags:
   -curve name

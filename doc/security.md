@@ -168,6 +168,45 @@ Watch for your own key in the log and report if there's ever a change, even
 momentary, that you did not initiate yourself.
 You'll be giving the rest of our users herd immunity.
 
+### Trusting keys without a key server
+
+The arrangement above makes the key server an unconditionally trusted party.
+A user record is not signed, so whatever the key server returns for a user is
+believed, including the public key to which a client wraps the keys of the
+files it shares.
+That is a great deal of trust to place in one service in a system that is
+otherwise end-to-end encrypted, and it became a practical problem as well as a
+theoretical one when the central key server was retired.
+
+A configuration may instead name a `keydir`, a directory of records it pins.
+A pinned record is used as it stands; no key server is consulted for that user
+and none can substitute a key of its own.
+Verify a key against a copy obtained by some means an attacker does not
+control, such as over the telephone, by comparing the fingerprint reported by
+`upspin user`, and pin it with `upspin keytrust -add -fingerprint=...`.
+
+Checking every key by hand does not scale, so a record may be *attested*:
+signed by a key pinned as the *trust anchor* for its domain.
+Pinning one anchor for a domain is then enough to accept records for every
+user in it.
+`upspin keysign` produces an attested record and `upspin keytrust -add
+-anchor` pins an anchor.
+An attested record is safe to carry over any channel, so it may be published:
+in a directory of an Upspin name space named by the `keysets` setting, or, if
+`keydiscovery` is set, at a well-known HTTPS path on the user's own domain,
+found by DNS SRV record.
+None of those channels is trusted; the attestation is what is believed, and it
+is checked against an anchor the reader pinned.
+
+Nothing pushes a key change, so a pinned record can outlive the key it names.
+Until it is replaced, files shared with that user are wrapped to a key they no
+longer hold, and neither party is told.
+`upspin keytrust -check` compares each pinned record with what is published
+for that user now and reports any that disagree; a lookup that already holds a
+published record disagreeing with a pin fails rather than answering with the
+stale one.
+See `go doc upspin.io/key/trust` and the config file documentation.
+
 As far as Upspin is concerned, a user is an email address, authenticated by an
 elliptic curve key pair used for signing and encrypting.
 We anticipate that the user will rotate keys over time, but we also assume that

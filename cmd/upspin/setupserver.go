@@ -20,6 +20,7 @@ import (
 	"upspin.io/config"
 	"upspin.io/factotum"
 	"upspin.io/flags"
+	"upspin.io/key/trust"
 	"upspin.io/subcmd"
 	"upspin.io/upspin"
 )
@@ -33,6 +34,12 @@ It assumes that you have run 'setupdomain' and (optionally) 'setupstorage'.
 It registers the user created by 'setupdomain' domain with the key server,
 copies the configuration files from $where/$domain to the upspinserver and
 restarts it, puts the Writers file, and makes the root for the calling user.
+
+If the configuration names a keydir, the server user is also pinned there,
+so that it can be resolved without a key server. If there is no key server
+at all, that is the only place it is recorded, and the record must reach
+the server and its users by some other means; 'upspin keytrust -export'
+writes it out for that purpose.
 
 The calling user and the server user are included in the Writers file by
 default (giving them write access to the store and directory). You may specify
@@ -72,27 +79,52 @@ The calling user must be the same one that ran 'upspin setupdomain'.
 		NetAddr:   cfg.Addr,
 	}
 
-	// Put the server user to the key server.
-	key, err := bind.KeyServer(s.Config, s.Config.KeyEndpoint())
-	if err != nil {
-		s.Exit(err)
-	}
 	local, err := userFor(cfgPath, cfg)
 	if err != nil {
 		s.Exit(err)
 	}
-	remote, err := key.Lookup(cfg.User)
-	if err == nil {
-		// TODO(adg): compare local and remote for discrepancies.
-		_ = remote
-		fmt.Fprintf(s.Stderr, "User %q already exists on key server.\n", cfg.User)
-	} else {
-		if err := key.Put(local); err != nil {
-			// TODO(adg): Check whether the TXT record for this
-			// domain is in place.
+
+	// Pin the server user in the local key directory, if there is one.
+	// The record was just built from files on this machine, so there is
+	// nothing to verify it against and nothing to verify: it is the
+	// authority for this server.
+	keyDir, err := trust.Dir(s.Config)
+	if err != nil {
+		s.Exit(err)
+	}
+	if keyDir != "" {
+		if err := trust.Write(keyDir, local); err != nil {
 			s.Exit(err)
 		}
-		fmt.Fprintf(s.Stderr, "Successfully put %q to the key server.\n", cfg.User)
+		fmt.Fprintf(s.Stderr, "Pinned %q in %s.\n", cfg.User, keyDir)
+	}
+
+	// Put the server user to the key server, if there is one. A
+	// configuration with a key directory and no key server is a complete
+	// arrangement, so the absence of one is not a failure.
+	if s.Config.KeyEndpoint().Transport == upspin.Unassigned {
+		if keyDir == "" {
+			s.Exitf("no key server and no %s: %q cannot be recorded anywhere",
+				trust.ConfigKey, cfg.User)
+		}
+	} else {
+		key, err := bind.KeyServer(s.Config, s.Config.KeyEndpoint())
+		if err != nil {
+			s.Exit(err)
+		}
+		remote, err := key.Lookup(cfg.User)
+		if err == nil {
+			// TODO(adg): compare local and remote for discrepancies.
+			_ = remote
+			fmt.Fprintf(s.Stderr, "User %q already exists on key server.\n", cfg.User)
+		} else {
+			if err := key.Put(local); err != nil {
+				// TODO(adg): Check whether the TXT record for this
+				// domain is in place.
+				s.Exit(err)
+			}
+			fmt.Fprintf(s.Stderr, "Successfully put %q to the key server.\n", cfg.User)
+		}
 	}
 
 	// Create Writers file.

@@ -178,6 +178,26 @@ func Read(dir string, name upspin.UserName) (*upspin.User, error) {
 	return u, nil
 }
 
+// ReadRaw returns the pinned record for name as it is stored, including any
+// attestation, so that it can be passed on to someone else exactly as it
+// arrived. If there is no such record it returns an error of kind
+// errors.NotExist.
+func ReadRaw(dir string, name upspin.UserName) ([]byte, error) {
+	const op errors.Op = "key/trust.ReadRaw"
+	file, clean, err := fileName(op, dir, name)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(file)
+	if os.IsNotExist(err) {
+		return nil, errors.E(op, clean, errors.NotExist, "no pinned key")
+	}
+	if err != nil {
+		return nil, errors.E(op, clean, errors.IO, err)
+	}
+	return data, nil
+}
+
 // Validate reports whether u is fit to be pinned. It is stricter than
 // valid.User, which does not inspect the public key.
 func Validate(u *upspin.User) error {

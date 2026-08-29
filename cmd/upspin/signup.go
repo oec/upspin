@@ -51,6 +51,18 @@ recreate or reuse prior keys.
 
 The -signuponly flag tells signup to skip the generation of the configuration
 file and keys and only send the signup request to the key server.
+
+Signup needs a key server. A configuration that instead pins the keys it
+trusts, with a keydir entry, has no signing up to do: there is no register
+to be entered in. Generate the keys and configuration file with keygen,
+write out the record for the new user with
+
+	upspin user > me.yaml
+
+and give that file to the people who are to trust it, who pin it with
+'upspin keytrust -add -in=me.yaml'. If the domain has a trust anchor,
+attesting to the record with 'upspin keysign' saves them from checking its
+fingerprint one by one. See the keytrust and keysign commands.
 `
 	fs := flag.NewFlagSet("signup", flag.ExitOnError)
 	defaultKeyServer := string(config.New().KeyEndpoint().NetAddr)
