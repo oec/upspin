@@ -36,20 +36,15 @@ import (
 	_ "upspin.io/store/remote"
 )
 
-// The servers that "remote" tests will work against.
-const (
-	TestKeyServer   = "key.test.upspin.io:443"
-	TestStoreServer = "store.test.upspin.io:443"
-	TestDirServer   = "dir.test.upspin.io:443"
-	TestServerName  = "dir-server@upspin.io"
-)
+// TestServerName is the user the test servers run as.
+const TestServerName = "dir-server@upspin.io"
 
 // Setup is a configuration structure that contains a directory tree and other optional flags.
 type Setup struct {
 	// OwnerName is the name of the user that runs the tests.
 	OwnerName upspin.UserName
 
-	// Kind is what kind of servers to use, "inprocess", "server", or "remote".
+	// Kind is what kind of servers to use, "inprocess" or "server".
 	Kind string
 
 	// UpBox specifies whether to use upbox to run dirserver,
@@ -219,25 +214,6 @@ func New(setup *Setup) (*Env, error) {
 
 		env.Config = cfg
 
-	case "remote":
-		if setup.UpBox {
-			return nil, errors.E(op, "UpBox set with incompatible Kind (remote)")
-		}
-
-		cfg = config.SetKeyEndpoint(cfg, upspin.Endpoint{
-			Transport: upspin.Remote,
-			NetAddr:   TestKeyServer,
-		})
-		cfg = config.SetStoreEndpoint(cfg, upspin.Endpoint{
-			Transport: upspin.Remote,
-			NetAddr:   TestStoreServer,
-		})
-		cfg = config.SetDirEndpoint(cfg, upspin.Endpoint{
-			Transport: upspin.Remote,
-			NetAddr:   TestDirServer,
-		})
-		env.Config = cfg
-
 	default:
 		return nil, errors.E(op, errors.Errorf("bad kind %q", setup.Kind))
 	}
@@ -336,26 +312,15 @@ func (e *Env) NewUser(userName upspin.UserName) (upspin.Config, error) {
 	if err != nil {
 		return nil, errors.E(op, err)
 	}
-	var secrets string
-	if e.Setup.Kind == "remote" {
-		secrets = testutil.Repo("key", "testdata", "remote", string(user))
-	} else {
-		secrets = testutil.Repo("key", "testdata", string(user))
-	}
-	f, err := factotum.NewFromDir(secrets)
+	f, err := factotum.NewFromDir(testutil.Repo("key", "testdata", string(user)))
 	if err != nil {
 		return nil, errors.E(op, userName, err)
 	}
 	cfg = config.SetFactotum(cfg, f)
 
-	// Don't register users with the test cluster key server;
-	// our test users should be already registered there.
-	if e.Setup.Kind != "remote" {
-		// Register the user with the key server.
-		err = registerUserWithKeyServer(e.Config, cfg)
-		if err != nil {
-			return nil, errors.E(op, err)
-		}
+	// Register the user with the key server.
+	if err := registerUserWithKeyServer(e.Config, cfg); err != nil {
+		return nil, errors.E(op, err)
 	}
 
 	return cfg, nil

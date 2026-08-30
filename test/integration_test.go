@@ -369,24 +369,10 @@ var integrationTests = []struct {
 	{"Delete", testDelete},
 }
 
-const remoteTestMessage = `
-error: cannot find keys for remote test users.
-
-These tests are designed to be run against the test.upspin.io cluster,
-which is only accessible by the Upspin core team at Google.
-See upspin.io/key/testdata/remote/README for details.
-
-Run the test suite with -short to skip these tests.
-`
-
 func testSelectedOnePacking(t *testing.T, setup testenv.Setup) {
 	usercache.ResetGlobal()
 
 	env, err := testenv.New(&setup)
-	if errors.Is(errors.NotExist, err) && setup.Kind == "remote" {
-		t.Log(err)
-		t.Fatal(remoteTestMessage)
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,17 +433,12 @@ func TestIntegration(t *testing.T) {
 
 		{"inprocess", upspin.EEPack, cache, true},
 		{"server", upspin.EEPack, cache, true},
-
-		{"remote", upspin.EEPack, noCache, false},
 	}
 	for _, config := range testConfigs {
 		setup := setupTemplate
 		setup.Kind = config.kind
 		setup.Packing = config.packing
 		setup.Cache = config.cache
-		if config.kind == "remote" {
-			setup.UpBox = false
-		}
 		name := fmt.Sprintf("kind=%v/packing=%v/cache=%t", config.kind, config.packing, config.cache)
 		t.Run(name, func(t *testing.T) {
 			if testing.Short() && !config.always {
