@@ -106,7 +106,7 @@ func TestKeyServerAttestation(t *testing.T) {
 			pat,
 			do("user quinn@example.org"),
 			"",
-			expect("name: quinn@example.org", "# fingerprint: SHA256:", "# attested"),
+			expect("name: quinn@example.org", "# fingerprint: SHA256:", "# attested by "),
 		},
 		{
 			// Now the record is published with a different key,
@@ -160,7 +160,7 @@ func saveSubstituted(good, bad, otherKey string) func(t *testing.T, r *runner, c
 		if stderr != "" {
 			t.Fatalf("%q: unexpected error:\n\t%q", cmd.name, stderr)
 		}
-		if !strings.Contains(stdout, "\n---\nsignature: ") {
+		if !strings.Contains(stdout, "\n---\nsignatures:\n") {
 			t.Fatalf("%q: no attestation in output:\n%s", cmd.name, stdout)
 		}
 		if err := os.WriteFile(good, []byte(stdout), 0600); err != nil {

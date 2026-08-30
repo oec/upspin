@@ -109,12 +109,30 @@ func expectAndFail(errStr string, words ...string) func(t *testing.T, r *runner,
 // key altered to the file bad, so that later commands can read both. The
 // files cannot be prepared before the test runs, since the attestation is
 // what the command produces.
+// save writes the command's output to a file and checks that it contains each
+// of the words given, so that a later command can be given the file.
+func save(file string, words ...string) func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+	return func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
+		if stderr != "" {
+			t.Fatalf("%q: unexpected error:\n\t%q", cmd.name, stderr)
+		}
+		for _, word := range words {
+			if !strings.Contains(stdout, word) {
+				t.Fatalf("%q: output did not contain %q:\n%s", cmd.name, word, stdout)
+			}
+		}
+		if err := os.WriteFile(file, []byte(stdout), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func saveAttested(good, bad string) func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
 	return func(t *testing.T, r *runner, cmd *cmdTest, stdout, stderr string) {
 		if stderr != "" {
 			t.Fatalf("%q: unexpected error:\n\t%q", cmd.name, stderr)
 		}
-		for _, word := range []string{"name: newbie@example.net", "\n---\nsignature: "} {
+		for _, word := range []string{"name: newbie@example.net", "\n---\nsignatures:\n", "signer: "} {
 			if !strings.Contains(stdout, word) {
 				t.Fatalf("%q: output did not contain %q:\n%s", cmd.name, word, stdout)
 			}
@@ -157,6 +175,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 	}
 	attested := filepath.Join(tmp, "newbie.attested")
 	tampered := filepath.Join(tmp, "newbie.tampered")
+	cosigned := filepath.Join(tmp, "newbie.cosigned")
 
 	// A record with no attestation at all. Publishing it in a delegated
 	// set must not be enough to make anyone believe it.
@@ -230,7 +249,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			dana,
 			do("keytrust -export newbie@example.net"),
 			"",
-			expect("name: newbie@example.net", "---", "signature: "),
+			expect("name: newbie@example.net", "---", "signatures:", "signer: "),
 		},
 		{
 			"a tampered attested record is refused",
@@ -240,7 +259,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 				"keytrust -add -in="+tampered,
 			),
 			"",
-			fail("attestation does not verify"),
+			fail("the attestation by dana@example.net does not verify"),
 		},
 		{
 			// dana publishes a directory of records in her own name
@@ -337,11 +356,78 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			expect("removed newbie@example.net", "pinned newbie@example.net", "(attested)", "\tok"),
 		},
 		{
+			// ravi appends his signature to dana's, without her
+			// agreement and without touching the record: a
+			// signature covers the record alone, so the two are
+			// independent.
+			"add a second signature to an attested record",
+			ravi,
+			do("keysign -add -in=" + attested),
+			"",
+			save(cosigned,
+				"name: newbie@example.net",
+				"signer: dana@example.net",
+				"signer: ravi@example.net"),
+		},
+		{
+			// A domain may have more than one anchor. This is the
+			// changeover: both are pinned at once.
+			"pin a second trust anchor for the domain",
+			dana,
+			do("keytrust -add -anchor -force ravi@example.net", "keytrust"),
+			"",
+			expect(
+				"pinned ravi@example.net as the trust anchor for example.net",
+				"anchor for example.net\tdana@example.net",
+				"anchor for example.net\travi@example.net"),
+		},
+		{
+			// -domain removes one anchor and leaves the rest, which
+			// is what completes a rotation.
+			"remove one of the two anchors",
+			dana,
+			do(
+				"keytrust -remove -anchor -domain=example.net dana@example.net",
+				"keytrust",
+			),
+			"",
+			expect(
+				"removed dana@example.net as a trust anchor for example.net",
+				"anchor for example.net\travi@example.net"),
+		},
+		{
+			// With dana no longer an anchor her signature means
+			// nothing here, but ravi's is on the same record, so it
+			// is still accepted. That is the point of carrying
+			// several: nobody had to re-sign or re-publish.
+			"the co-signed record is still accepted",
+			dana,
+			do(
+				"keytrust -remove newbie@example.net",
+				"keytrust -add -in="+cosigned,
+			),
+			"",
+			expect("pinned newbie@example.net", "(attested)"),
+		},
+		{
+			// The record signed by dana alone is not: an anchor is
+			// still pinned for the domain, but no signature on this
+			// record was made by it.
+			"the record signed only by the old anchor is not",
+			dana,
+			do(
+				"keytrust -remove newbie@example.net",
+				"keytrust -add -in="+attested,
+			),
+			"",
+			fail("no signature by a trust anchor pinned for example.net"),
+		},
+		{
 			"remove the trust anchor",
 			dana,
 			do("keytrust -remove -anchor example.net"),
 			"",
-			expect("removed the trust anchor for example.net"),
+			expect("removed the trust anchors for example.net"),
 		},
 	}...)
 }

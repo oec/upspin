@@ -351,18 +351,29 @@ Flags:
 
 Sub-command keysign
 
-Usage: upspin keysign [-in=file] [username]
-              keysign -bundle username-or-file...
+Usage: upspin keysign [-add] [-in=file] [username]
+              keysign [-add] -bundle username-or-file...
 
 Keysign writes to standard output an attested user record: the record
 for a user, followed by a signature over it made with the current
-user's key.
+user's key and naming the current user as the signer.
 
 With -bundle, keysign attests to several records at once and writes
 them as a bundle, the form a domain publishes at
 /.well-known/upspin/keys for readers that discover records over DNS.
 The arguments are then user names, files, or both; a file may hold a
 record already attested, in which case the attestation is replaced.
+
+With -add, a record read from a file keeps the signatures it already
+carries and this user's signature is appended to them, rather than
+replacing them. A record may carry any number of signatures: each
+covers the record alone, so one can be added without the agreement of
+whoever signed before, and a reader accepts the record on whichever
+signature was made by an anchor they have pinned. Two arrangements
+need this. A domain rotating its anchor key publishes records signed
+by both keys, so that readers can re-pin in their own time; and one
+record can carry the signatures of a domain's own anchor and of a
+third party, serving readers who trust either.
 
 An attested record can be pinned by anyone who has pinned the signing
 key as the trust anchor for that user's domain, without their having
@@ -388,6 +399,8 @@ or, to publish every user of a domain at once:
 	upspin keysign -bundle ann@example.com chris@example.com > keys
 
 Flags:
+  -add
+    	append this signature to those a record already carries
   -bundle
     	attest to several records and write them as a published bundle
   -help
@@ -404,6 +417,7 @@ Usage: upspin keytrust [username...]
               keytrust -add -anchor [-domain=name] [-fingerprint=fp] [-force] username
               keytrust -remove username...
               keytrust -remove -anchor domain...
+              keytrust -remove -anchor -domain=name username...
               keytrust -check [username...]
               keytrust -export username...
 
@@ -434,16 +448,24 @@ control, such as over the telephone, and see it for a given key with
 
 	upspin user <username>
 
-With -add and -anchor, keytrust pins a user as the trust anchor for a
-domain: the key entitled to attest for every user in it, so that those
+With -add and -anchor, keytrust pins a user as a trust anchor for a
+domain: a key entitled to attest for every user in it, so that those
 users can be pinned on the strength of that one key rather than
 verified one by one. The domain defaults to the domain of the user
 being pinned, and -domain names another. An anchor is the key on which
 all the others rest, so it must itself be verified: -fingerprint or
 -force is always required.
 
-With -remove, keytrust deletes the record for each user named, or,
-with -anchor, the trust anchor for each domain named.
+A domain may have more than one anchor, and a record is accepted on a
+signature by any of them. That is what makes it possible to replace an
+anchor key without arranging for everyone to re-pin at the same
+instant: pin the new anchor beside the old, and drop the old one once
+the records in circulation carry a signature by the new.
+
+With -remove, keytrust deletes the record for each user named; with
+-anchor, every anchor for each domain named; and with -anchor and
+-domain, only the anchors named as arguments within that one domain,
+leaving any others in place.
 
 With -check, keytrust compares each pinned record, or each of those
 named as arguments, against what is published for that user now by the
@@ -469,7 +491,7 @@ Flags:
   -check
     	report pinned records that disagree with what is published now
   -domain domain
-    	the domain a trust anchor attests for (default: the anchor's own domain)
+    	the domain whose anchors to act on (default: the anchor's own domain)
   -export
     	write pinned records, with their attestations, to standard output
   -fingerprint fingerprint

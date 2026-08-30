@@ -258,7 +258,7 @@ func TestKeyServerAttestation(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, _ := anchorFactotum(t)
-	attested, err := Sign(f, attestedUser()) // carol@example.com, holding bobKey
+	attested, err := Sign(f, anchorName, attestedUser()) // carol@example.com, holding bobKey
 	if err != nil {
 		t.Fatal(err)
 	}

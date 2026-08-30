@@ -66,7 +66,7 @@ func anchored(t *testing.T) (dir string, record []byte) {
 	if err := WriteAnchor(dir, "example.com", annUser()); err != nil {
 		t.Fatal(err)
 	}
-	record, err := Sign(f, attestedUser()) // carol@example.com
+	record, err := Sign(f, anchorName, attestedUser()) // carol@example.com
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,13 +104,13 @@ func TestDiscoveryConfig(t *testing.T) {
 
 func TestBundle(t *testing.T) {
 	f, key := anchorFactotum(t)
-	one, err := Sign(f, attestedUser())
+	one, err := Sign(f, anchorName, attestedUser())
 	if err != nil {
 		t.Fatal(err)
 	}
 	other := attestedUser()
 	other.Name = "dave@example.com"
-	two, err := Sign(f, other)
+	two, err := Sign(f, anchorName, other)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestBundle(t *testing.T) {
 		t.Error("ParseBundle did not return the records byte for byte")
 	}
 	for i, record := range got {
-		if _, err := Verify(record, key); err != nil {
+		if _, err := Verify(record, anchorName, key); err != nil {
 			t.Errorf("record %d does not verify after bundling: %v", i, err)
 		}
 	}
@@ -203,7 +203,7 @@ func TestDiscoveryTrustsOnlyTheAnchor(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A record signed by a key that is not example.com's anchor.
-	forged, err := Sign(otherFactotum(t), attestedUser())
+	forged, err := Sign(otherFactotum(t), otherName, attestedUser())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestDiscoveryTrustsOnlyTheAnchor(t *testing.T) {
 		f, _ := anchorFactotum(t)
 		elsewhere := attestedUser()
 		elsewhere.Name = "carol@other.example"
-		record, err := Sign(f, elsewhere)
+		record, err := Sign(f, anchorName, elsewhere)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -46,16 +46,24 @@ control, such as over the telephone, and see it for a given key with
 
 	upspin user <username>
 
-With -add and -anchor, keytrust pins a user as the trust anchor for a
-domain: the key entitled to attest for every user in it, so that those
+With -add and -anchor, keytrust pins a user as a trust anchor for a
+domain: a key entitled to attest for every user in it, so that those
 users can be pinned on the strength of that one key rather than
 verified one by one. The domain defaults to the domain of the user
 being pinned, and -domain names another. An anchor is the key on which
 all the others rest, so it must itself be verified: -fingerprint or
 -force is always required.
 
-With -remove, keytrust deletes the record for each user named, or,
-with -anchor, the trust anchor for each domain named.
+A domain may have more than one anchor, and a record is accepted on a
+signature by any of them. That is what makes it possible to replace an
+anchor key without arranging for everyone to re-pin at the same
+instant: pin the new anchor beside the old, and drop the old one once
+the records in circulation carry a signature by the new.
+
+With -remove, keytrust deletes the record for each user named; with
+-anchor, every anchor for each domain named; and with -anchor and
+-domain, only the anchors named as arguments within that one domain,
+leaving any others in place.
 
 With -check, keytrust compares each pinned record, or each of those
 named as arguments, against what is published for that user now by the
@@ -77,7 +85,7 @@ See the keysign command for producing an attested record.
 	add := fs.Bool("add", false, "add a pinned user record")
 	remove := fs.Bool("remove", false, "remove pinned user records")
 	anchor := fs.Bool("anchor", false, "the record is a trust anchor, entitled to attest for a domain")
-	domain := fs.String("domain", "", "the `domain` a trust anchor attests for (default: the anchor's own domain)")
+	domain := fs.String("domain", "", "the `domain` whose anchors to act on (default: the anchor's own domain)")
 	inFile := fs.String("in", "", "`file` holding the user record to pin (default: ask the key server)")
 	fingerprint := fs.String("fingerprint", "", "require the key to have this `fingerprint` before pinning it")
 	force := fs.Bool("force", false, "pin the key without verifying its fingerprint")
@@ -89,6 +97,7 @@ See the keysign command for producing an attested record.
 			"              keytrust -add -anchor [-domain=name] [-fingerprint=fp] [-force] username\n"+
 			"              keytrust -remove username...\n"+
 			"              keytrust -remove -anchor domain...\n"+
+			"              keytrust -remove -anchor -domain=name username...\n"+
 			"              keytrust -check [username...]\n"+
 			"              keytrust -export username...")
 
@@ -189,12 +198,14 @@ func (s *State) keytrustCheck(fs *flag.FlagSet, dir string) {
 			s.Exit(err)
 		}
 		for _, domain := range domains {
-			u, err := trust.ReadAnchor(dir, domain)
+			anchors, err := trust.ReadAnchors(dir, domain)
 			if err != nil {
 				s.Fail(err)
 				continue
 			}
-			pins = append(pins, pin{name: u.Name, anchor: domain})
+			for _, u := range anchors {
+				pins = append(pins, pin{name: u.Name, anchor: domain})
+			}
 		}
 	}
 
@@ -203,7 +214,7 @@ func (s *State) keytrustCheck(fs *flag.FlagSet, dir string) {
 		var pinned *upspin.User
 		var err error
 		if p.anchor != "" {
-			pinned, err = trust.ReadAnchor(dir, p.anchor)
+			pinned, err = trust.ReadAnchor(dir, p.anchor, p.name)
 		} else {
 			pinned, err = trust.Read(dir, p.name)
 		}
@@ -335,17 +346,30 @@ func (s *State) keytrustAdd(fs *flag.FlagSet, dir, inFile, fingerprint string, f
 
 // keytrustRemove deletes pinned records or trust anchors.
 func (s *State) keytrustRemove(fs *flag.FlagSet, dir string, anchor bool, domain string) {
-	if domain != "" {
-		s.Exitf("-domain is not used with -remove; name the domains as arguments")
+	if domain != "" && !anchor {
+		s.Exitf("-domain is only used with -anchor")
 	}
 	for i := 0; i < fs.NArg(); i++ {
 		arg := fs.Arg(i)
 		if anchor {
-			if err := trust.RemoveAnchor(dir, arg); err != nil {
+			// Without -domain the arguments name domains, and every
+			// anchor for each goes. With it they name anchors
+			// within that one domain, so that a domain with more
+			// than one keeps the rest.
+			if domain != "" {
+				name := s.cleanUserName(arg)
+				if err := trust.RemoveAnchor(dir, domain, name); err != nil {
+					s.Fail(err)
+					continue
+				}
+				s.Printf("removed %s as a trust anchor for %s\n", name, domain)
+				continue
+			}
+			if err := trust.RemoveAnchors(dir, arg); err != nil {
 				s.Fail(err)
 				continue
 			}
-			s.Printf("removed the trust anchor for %s\n", arg)
+			s.Printf("removed the trust anchors for %s\n", arg)
 			continue
 		}
 		name := s.cleanUserName(arg)
@@ -396,12 +420,14 @@ func (s *State) keytrustList(fs *flag.FlagSet, dir string) {
 		s.Exit(err)
 	}
 	for _, domain := range domains {
-		u, err := trust.ReadAnchor(dir, domain)
+		anchors, err := trust.ReadAnchors(dir, domain)
 		if err != nil {
 			s.Fail(err)
 			continue
 		}
-		s.Printf("anchor for %s\t%s\t%s\n", domain, u.Name, factotum.Fingerprint(u.PublicKey))
+		for _, u := range anchors {
+			s.Printf("anchor for %s\t%s\t%s\n", domain, u.Name, factotum.Fingerprint(u.PublicKey))
+		}
 	}
 }
 

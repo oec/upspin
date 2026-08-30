@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 
@@ -97,7 +98,19 @@ To install new users see the signup command.
 			s.Printf("# fingerprint: %s\n", factotum.Fingerprint(u.PublicKey))
 		}
 		if len(u.Attestation) > 0 {
-			s.Printf("# attested\n")
+			// Name the signers. Which of them a reader believes
+			// depends on the anchors they have pinned, so saying
+			// only that the record is attested leaves out the one
+			// thing they need in order to act on it.
+			if _, sigs, err := trust.Split(u.Attestation); err == nil {
+				signers := make([]string, 0, len(sigs))
+				for _, sig := range sigs {
+					signers = append(signers, string(sig.Signer))
+				}
+				s.Printf("# attested by %s\n", strings.Join(signers, ", "))
+			} else {
+				s.Printf("# attested\n")
+			}
 		}
 		s.Printf("\n")
 		if name != s.Config.UserName() {
@@ -164,7 +177,7 @@ func (s *State) putUser(fs *flag.FlagSet, keyServer upspin.KeyServer, inFile str
 		// TODO(adg): better error message?
 		s.Exit(err)
 	}
-	if attestation != nil {
+	if len(attestation) > 0 {
 		userStruct.Attestation = data
 	}
 	if fs.NArg() != 0 && upspin.UserName(fs.Arg(0)) != userStruct.Name {

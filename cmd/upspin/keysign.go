@@ -18,13 +18,24 @@ func (s *State) keysign(args ...string) {
 	const help = `
 Keysign writes to standard output an attested user record: the record
 for a user, followed by a signature over it made with the current
-user's key.
+user's key and naming the current user as the signer.
 
 With -bundle, keysign attests to several records at once and writes
 them as a bundle, the form a domain publishes at
 /.well-known/upspin/keys for readers that discover records over DNS.
 The arguments are then user names, files, or both; a file may hold a
 record already attested, in which case the attestation is replaced.
+
+With -add, a record read from a file keeps the signatures it already
+carries and this user's signature is appended to them, rather than
+replacing them. A record may carry any number of signatures: each
+covers the record alone, so one can be added without the agreement of
+whoever signed before, and a reader accepts the record on whichever
+signature was made by an anchor they have pinned. Two arrangements
+need this. A domain rotating its anchor key publishes records signed
+by both keys, so that readers can re-pin in their own time; and one
+record can carry the signatures of a domain's own anchor and of a
+third party, serving readers who trust either.
 
 An attested record can be pinned by anyone who has pinned the signing
 key as the trust anchor for that user's domain, without their having
@@ -52,11 +63,16 @@ or, to publish every user of a domain at once:
 	fs := flag.NewFlagSet("keysign", flag.ExitOnError)
 	inFile := fs.String("in", "", "`file` holding the user record to sign (default: ask the key server)")
 	bundle := fs.Bool("bundle", false, "attest to several records and write them as a published bundle")
-	s.ParseFlags(fs, args, help, "keysign [-in=file] [username]\n              keysign -bundle username-or-file...")
+	add := fs.Bool("add", false, "append this signature to those a record already carries")
+	s.ParseFlags(fs, args, help, "keysign [-add] [-in=file] [username]\n              keysign [-add] -bundle username-or-file...")
 
 	f := s.Config.Factotum()
 	if f == nil {
 		s.Exitf("no factotum available")
+	}
+	signer := s.Config.UserName()
+	if signer == "" {
+		s.Exitf("no user name in the configuration; a signature must name its signer")
 	}
 
 	if *bundle {
@@ -68,7 +84,7 @@ or, to publish every user of a domain at once:
 		}
 		var records [][]byte
 		for i := 0; i < fs.NArg(); i++ {
-			records = append(records, s.attest(f, fs.Arg(i)))
+			records = append(records, s.attest(f, signer, fs.Arg(i), *add))
 		}
 		data, err := trust.Bundle(records)
 		if err != nil {
@@ -84,34 +100,64 @@ or, to publish every user of a domain at once:
 		if fs.NArg() > 1 {
 			s.Exitf("at most one user name may be given with -in")
 		}
-		u = s.recordFromFile(s.GlobOneLocal(*inFile))
+		file := s.GlobOneLocal(*inFile)
+		if *add {
+			data := s.addSignature(f, signer, s.ReadAll(file))
+			s.Printf("%s", data)
+			return
+		}
+		u = s.recordFromFile(file)
 		if fs.NArg() == 1 && s.cleanUserName(fs.Arg(0)) != u.Name {
 			s.Exitf("user name given does not match the one read from %s", *inFile)
 		}
 	default:
+		if *add {
+			s.Exitf("-add needs a record to add to; name one with -in")
+		}
 		if fs.NArg() != 1 {
 			s.Exitf("exactly one user name must be given")
 		}
 		u = s.recordFor(fs.Arg(0))
 	}
 
-	data, err := trust.Sign(f, u)
+	data, err := trust.Sign(f, signer, u)
 	if err != nil {
 		s.Exit(err)
 	}
 	s.Printf("%s", data)
 }
 
+// addSignature appends signer's signature to the attested record in data.
+func (s *State) addSignature(f upspin.Factotum, signer upspin.UserName, data []byte) []byte {
+	if _, sigs, err := trust.Split(data); err != nil {
+		s.Exit(err)
+	} else if len(sigs) == 0 {
+		s.Exitf("-add needs a record that is already attested; this one carries no signature")
+	}
+	signed, err := trust.Add(data, f, signer)
+	if err != nil {
+		s.Exit(err)
+	}
+	return signed
+}
+
 // attest returns an attested record for arg, which names either a local file
 // holding a record or a user to look up.
-func (s *State) attest(f upspin.Factotum, arg string) []byte {
+func (s *State) attest(f upspin.Factotum, signer upspin.UserName, arg string, add bool) []byte {
 	var u *upspin.User
 	if _, _, _, err := user.Parse(upspin.UserName(arg)); err == nil {
+		if add {
+			s.Exitf("-add applies to records read from a file, not to %s", arg)
+		}
 		u = s.recordFor(arg)
 	} else {
-		u = s.recordFromFile(s.GlobOneLocal(arg))
+		file := s.GlobOneLocal(arg)
+		if add {
+			return s.addSignature(f, signer, s.ReadAll(file))
+		}
+		u = s.recordFromFile(file)
 	}
-	data, err := trust.Sign(f, u)
+	data, err := trust.Sign(f, signer, u)
 	if err != nil {
 		s.Exit(err)
 	}
