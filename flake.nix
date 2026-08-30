@@ -24,7 +24,7 @@
 
         upspin = pkgs.buildGoModule {
           pname = "upspin";
-          version = "trustanchor-experiment-2026-08-30";  # or a real tag from your repo
+          version = "2026-08-30";  # or a real tag from your repo
 
           # Build from the local source tree in this repo
           src = ./.;
