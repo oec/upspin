@@ -31,7 +31,7 @@
 
           # Set to lib.fakeHash first, then replace with the real value
           # from the build error output
-          vendorHash = sha256-YemCe8OrPdx4y7308ZlYmqqT7QdXrGz7WUX9BOkzBS8=;
+          vendorHash = "sha256-YemCe8OrPdx4y7308ZlYmqqT7QdXrGz7WUX9BOkzBS8=";
 
           doCheck = false;
 
