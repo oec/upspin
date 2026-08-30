@@ -8,7 +8,9 @@ package errors_test
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -17,14 +19,28 @@ import (
 	"upspin.io/valid"
 )
 
-var errorLines = strings.Split(strings.TrimSpace(`
-	.*/upspin.io/errors/debug_test.go:\d+: upspin.io/errors_test..*
-	.*/upspin.io/errors/debug_test.go:\d+: .*
-	.*/upspin.io/valid/valid.go:\d+: .*valid.UserName:
-	.*/upspin.io/user/user.go:\d+: ...user.Parse: op: user@home/path: invalid operation:
+// repoDir is the directory holding this repository, taken from the path of
+// this file as the compiler recorded it. The frames in an error stack are
+// recorded the same way, so deriving the directory is better than assuming the
+// repository sits in one named upspin.io: that holds under GOPATH, but a
+// module may be cloned into a directory of any name. It is also right under
+// -trimpath, which shortens both this path and those in the stack alike.
+var repoDir = func() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("errors: cannot determine the path of debug_test.go")
+	}
+	return filepath.Dir(filepath.Dir(file))
+}()
+
+var errorLines = strings.Split(strings.TrimSpace(fmt.Sprintf(`
+	%[1]s/errors/debug_test.go:\d+: upspin.io/errors_test..*
+	%[1]s/errors/debug_test.go:\d+: .*
+	%[1]s/valid/valid.go:\d+: .*valid.UserName:
+	%[1]s/user/user.go:\d+: ...user.Parse: op: user@home/path: invalid operation:
 	valid.UserName:
 	user.Parse: user bad-username: user name must contain one @ symbol
-`), "\n")
+`, regexp.QuoteMeta(repoDir))), "\n")
 
 var errorLineREs = make([]*regexp.Regexp, len(errorLines))
 
