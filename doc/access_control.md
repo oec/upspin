@@ -161,7 +161,7 @@ file regardless of the rights granted by `Access` files.
 All other rights for the owner are defined by the contents of the `Access`
 files.
 
-Encrypted packings (described in the [Upspin Security document](/doc/security.md))  in
+Encrypted packings (described in the [Upspin Security document](security.md))  in
 Upspin also have the effect of limiting who can read file contents, by only
 wrapping the file decryption key for certain readers.
 The intent is that this list of readers derives from the `Access` file, and
@@ -288,7 +288,7 @@ files.
 As a side note: a user-name wildcard such as `*@example.com` applied to the
 read right can only provide genuine read access if the item being read is not
 encrypted, or if every user in the domain has a key wrapped for the item (see
-the [Upspin Security document](/doc/security.md)), which is impractical at best.
+the [Upspin Security document](security.md)), which is impractical at best.
 In future, Upspin may provide a mechanism for some sort of key mechanism that
 would allow encrypted files to be accessible by everyone in an organization,
 but that has not been done.
@@ -384,7 +384,7 @@ read-only: the tree is maintained and updated by the server but cannot be
 modified with Upspin calls to the `DirServer`.
 
 For a brief discussion of user names and + suffixes, see the
-[Overview document](/doc/overview.md)'s section on users.
+[Overview document](overview.md)'s section on users.
 
 ## Appendix: Summary of access rules
 

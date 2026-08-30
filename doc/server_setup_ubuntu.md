@@ -1,7 +1,7 @@
 # Running `upspinserver` on Ubuntu 16.04
 
 These instructions are part of the instructions for
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).
 Please make sure you have read that document first.
 
 ## Introduction
@@ -128,4 +128,4 @@ server# journalctl -f -u upspinserver
 ## Continue
 
 You can now continue following the instructions in
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).

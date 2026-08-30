@@ -33,7 +33,7 @@ key server, `key.upspin.io`, which was retired in 2025. Where they say to
 register with it, you must instead name a key server of your own, or give the
 server a `KeyDir` in its `serverconfig.json` and pin the users it is to
 authenticate; the two arrangements are described in
-[the config file](/doc/config.md) and in `go doc upspin.io/key/trust`.
+[the config file](config.md) and in `go doc upspin.io/key/trust`.
 A server with a key directory needs no key server at all: that directory is in
 effect the list of users it will authenticate.
 
@@ -85,10 +85,10 @@ name as its `-server` argument, and your chosen Upspin user name as its final
 argument. Then follow the onscreen instructions.
 
 With no key server, generate the keys with `upspin keygen` and exchange records
-by hand, as [Signing up a new user](/doc/signup.md) describes; there is nothing
+by hand, as [Signing up a new user](signup.md) describes; there is nothing
 to register with.
 
-The [Signing up a new user](/doc/signup.md) document describes this process in
+The [Signing up a new user](signup.md) document describes this process in
 detail.
 If you change your mind about the host name, you can update with `upspin user -put`.
 
@@ -149,7 +149,7 @@ administrator of Upspin's use of `example.com`.
 
 As a guide, here's what the DNS record looks like in Google Domains:
 
-![DNS Entries](https://upspin.io/images/txt_dns.png)
+![DNS Entries](images/txt_dns.png)
 
 Consult your registrar's documentation if it is not clear how to add a TXT
 record to your domain.
@@ -200,11 +200,11 @@ in the event of a disk failure all your Upspin data will be lost.**
 
 ### Specific instructions for cloud services {#cloud}
 
-+ [Google Cloud Services](/doc/server_setup_gcp.md)
-+ [Google Drive](/doc/server_setup_drive.md)
-+ [Amazon Web Services](/doc/server_setup_aws.md)
-+ [Dropbox](/doc/server_setup_dropbox.md)
-+ [Backblaze B2](/doc/server_setup_b2.md)
++ [Google Cloud Services](server_setup_gcp.md)
++ [Google Drive](server_setup_drive.md)
++ [Amazon Web Services](server_setup_aws.md)
++ [Dropbox](server_setup_dropbox.md)
++ [Backblaze B2](server_setup_b2.md)
 
 ## Set up a server and deploy the `upspinserver` binary {#deploy}
 
@@ -249,7 +249,7 @@ startup and serve on ports `80` and `443`.
 You may do this however you like, but you may wish to follow one of these
 guides:
 
-- [Running `upspinserver` on Ubuntu 16.04](/doc/server_setup_ubuntu.md)
+- [Running `upspinserver` on Ubuntu 16.04](server_setup_ubuntu.md)
 - (More coming soon...)
 
 

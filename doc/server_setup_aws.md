@@ -1,7 +1,7 @@
 # AWS-specific server setup instructions
 
 These instructions are part of the instructions for
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).
 Please make sure you have read that document first.
 
 ## Build `upspinserver-aws` and `upspin-setupstorage-aws`
@@ -71,4 +71,4 @@ local$ upspin setupstorage-aws -clean -role_name=upspinstorage -domain=example.c
 ## Continue
 
 You can now continue following the instructions in
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).

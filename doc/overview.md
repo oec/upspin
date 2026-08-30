@@ -175,7 +175,7 @@ user.
 The access control mechanism determines who can read, write, delete, or even
 discover the existence of Upspin files.
 
-A separate document [Access Control](/doc/access_control.md) describes it in
+A separate document [Access Control](access_control.md) describes it in
 detail, but the basic idea is simple.
 
 By default, nothing is shared.
@@ -244,7 +244,7 @@ many large files.
 In summary, a key server provides a single place to store all public keys.
 The project ran one at `key.upspin.io`; since it was retired, a configuration
 names its own or pins the records it trusts locally, which is described in
-[the config file](/doc/config.md) and in `go doc upspin.io/key/trust`.
+[the config file](config.md) and in `go doc upspin.io/key/trust`.
 Users' actual data is stored across multiple directory and storage servers in
 the network; these servers are run by the users themselves (or by agents on
 their behalf).
@@ -308,7 +308,7 @@ The public keys of all users are registered in a central server to enable
 sharing even between strangers.
 
 The details of the encryption algorithm and the security guarantees they can
-make are described in a separate [Upspin Security document](/doc/security.md).
+make are described in a separate [Upspin Security document](security.md).
 
 Upspin also provides authentication mechanisms to block unauthorized users from
 accessing the network servers in the first place.
@@ -400,7 +400,7 @@ For the `DirServer` and `StoreServer`, you will need to deploy your own
 instances.
 If you want to use the reference implementations, you can run your own instance
 of `upspinserver` by following
-[the server setup instructions](/doc/server_setup.md).
+[the server setup instructions](server_setup.md).
 Or you could write your own (and we encourage you to think about doing so).
 It's up to you.
 Upspin is just a way to access things; what and where those things are is your
@@ -417,7 +417,7 @@ servers can authenticate the user.
 The public key is made public by creating a user record to hold it, either in a
 key server, or in the local key directories of those who are to trust it.
 The process for doing this is described in a
-[separate document](/doc/signup.md).
+[separate document](signup.md).
 
 Once registered in the key server, the user can access existing content stored
 in Upspin, assuming permission is granted.
@@ -429,7 +429,7 @@ instances on local machines or cloud systems.
 The addresses of the user's servers are then stored in the public key server's
 record for the user, at which point the user can start saving data in the
 system.
-Again the details are presented [separately](/doc/signup.md).
+Again the details are presented [separately](signup.md).
 
 ## Comparison with existing systems
 

@@ -1,7 +1,7 @@
 # Dropbox-specific server setup instructions
 
 These instructions are part of the instructions for
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).
 Please make sure you have read that document first.
 
 ## Build `upspinserver-dropbox` and `upspin-setupstorage-dropbox`
@@ -31,9 +31,9 @@ local$ GOOS=linux GOARCH=amd64 go build dropbox.upspin.io/cmd/upspinserver-dropb
 
 1. Visit the following [site](https://www.dropbox.com/oauth2/authorize?client_id=wt1281n3q768jj3&response_type=code).
 2. If necessary, log in with your Dropbox credentials and click on "Allow".
-   <img src="/images/dropbox/allow.png" alt="Allow Upspin storage server to access Dropbox"/>
+   <img src="images/dropbox/allow.png" alt="Allow Upspin storage server to access Dropbox"/>
 3. Copy the displayed authorization code.
-   <img src="/images/dropbox/code.png" alt="Dropbox API code"/>
+   <img src="images/dropbox/code.png" alt="Dropbox API code"/>
 
 Now run the `upspin-setupstorage-dropbox` command and pass the previously copied code as
 argument:
@@ -58,4 +58,4 @@ this folder on their Dropbox clients.
 ## Continue
 
 You can now continue following the instructions in
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).

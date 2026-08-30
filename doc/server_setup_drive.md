@@ -1,7 +1,7 @@
 # Google Drive-specific server setup instructions
 
 These instructions are part of the instructions for
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).
 Please make sure you have read that document first.
 
 ## Build `upspinserver-drive` and `upspin-setupstorage-drive`
@@ -44,4 +44,4 @@ to the [Manage Apps](https://developers.google.com/drive/v3/web/appdata) page of
 
 ## Continue
 
-You can now continue with the rest of the setup instructions: [Set up a server and deploy the upspinserver binary](/doc/server_setup.md#deploy).
+You can now continue with the rest of the setup instructions: [Set up a server and deploy the upspinserver binary](server_setup.md#deploy).

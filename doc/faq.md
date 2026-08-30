@@ -254,7 +254,7 @@ to create one, to delete one, or to "list" one, that is, to see if it exists.
 
 For a user to be able to read a file, the user must be granted
 access using the access control mechanisms described
-[elsewhere](/doc/access_control.md).
+[elsewhere](access_control.md).
 If the file is encrypted there must also be a copy of the file key encrypted
 with the user's public key and stored in the directory entry, as described above,
 
@@ -315,7 +315,7 @@ there.
 ## Keys
 
 Upspin users have a key pair for authentication and security.
-The details of their operation is covered in the [Upspin Security](/doc/security.md) document.
+The details of their operation is covered in the [Upspin Security](security.md) document.
 The questions here cover the main points at a high level.
 
 ### How are keys set up? {#keys}
@@ -380,7 +380,7 @@ Then you must recreate your config file on the new machine.
 The easiest way is just to copy the existing one using `scp` or some equivalent.
 Examine it after copying and correct any settings that should
 be different on the new machine.
-See the [Upspin configuration](/doc/config.md) document for details.
+See the [Upspin configuration](config.md) document for details.
 
 ### I lost my secret seed. How do I recover it? {#lost-seed}
 
@@ -543,14 +543,14 @@ full suite of transports.
 This section shows how to perform some common tasks around
 administrating an Upspin server installation.
 The examples assume you have signed up as `ann@example.com` as
-described in [Signing up a new user](/doc/signup.md) and have [set up
-`upspinserver`](/doc/server_setup.md) as a combined dirserver/storeserver for
+described in [Signing up a new user](signup.md) and have [set up
+`upspinserver`](server_setup.md) as a combined dirserver/storeserver for
 the domain `example.com`.
 Substitute your own user and domain names in the examples that follow.
 
 ### How do I add a family member to my Upspin installation?
 
-When you followed [the server setup instructions](/doc/server_setup.md),
+When you followed [the server setup instructions](server_setup.md),
 `upspin setupserver` created an initial version of the access control
 files for your Upspin installation that allows access for `ann@example.com` and
 the server user `upspin@example.com`.

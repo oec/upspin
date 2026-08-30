@@ -7,12 +7,12 @@
 > your public key known to the people you deal with.
 > This document describes both: registering with a key server, if you or they
 > run one, and the alternative, in which each side pins the keys it trusts.
-> See [the config file](/doc/config.md) and `go doc upspin.io/key/trust`.
+> See [the config file](config.md) and `go doc upspin.io/key/trust`.
 
 ## Introduction
 
 Before you sign up, you may want to read the
-[Upspin overview](/doc/overview.md) document.
+[Upspin overview](overview.md) document.
 It introduces the concepts and terminology you'll need to understand to use the
 system.
 
@@ -140,9 +140,9 @@ check. See `go doc upspin.io/key/trust`.
 > its option to deploy to the Google Cloud Platform depends on storage backends
 > that have moved out of this one; only the local disk backend remains here.
 > To set up a server by hand, and with local storage, follow
-> [Setting up `upspinserver`](/doc/server_setup.md) instead.
+> [Setting up `upspinserver`](server_setup.md) instead.
 > The `dirserver:` and `storeserver:` lines it describes are the same either
-> way; see [the config file](/doc/config.md).
+> way; see [the config file](config.md).
 
 Next you need to decide whether you are going to deploy your own Upspin
 directory and store servers, use those maintained by someone else, or
@@ -157,7 +157,7 @@ of three options:
 
 Choose the first option if you want to use Upspin servers provided by somebody
 else, or if you want to deploy your own servers manually (see the [Setting up
-`upspinserver`](/doc/server_setup.md) document for how to do this).
+`upspinserver`](server_setup.md) document for how to do this).
 
 Choose the second option to deploy your servers to the Google Cloud Platform
 using the `upspin-ui` program, and follow the on-screen instructions to
@@ -210,7 +210,7 @@ Although the `upspin-ui` and `upspin` tools support all the functionality of
 the system, for smoother operation you may want to install the FUSE daemon,
 `upspinfs`, and a cache server that improves performance.
 The cache server is particularly important, and the setup instructions are in
-the [Upspin configuration](/doc/config.md) document.
+the [Upspin configuration](config.md) document.
 
 ## Browsing Upspin Files on Linux and macOS {#upspinfs}
 

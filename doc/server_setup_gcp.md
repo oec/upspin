@@ -1,7 +1,7 @@
 # GCP-specific server setup instructions
 
 These instructions are part of the instructions for
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).
 Please make sure you have read that document first.
 
 ## Build `upspinserver-gcp` and `upspin-setupstorage-gcp`
@@ -82,4 +82,4 @@ You should now deploy the upspinserver binary and run 'upspin setupserver'.
 ## Continue
 
 You can now continue following the instructions in
-[Setting up `upspinserver`](/doc/server_setup.md).
+[Setting up `upspinserver`](server_setup.md).

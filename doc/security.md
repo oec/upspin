@@ -3,7 +3,7 @@
 ## Introduction
 
 The security design of Upspin has been sketched in the accompanying
-[Upspin overview](/doc/overview.md) document.
+[Upspin overview](overview.md) document.
 Here we dive into the deeper security issues.
 Some of the discussion may be of interest only to experts, but the general
 design should be understandable by anyone given background provided in the
@@ -109,7 +109,7 @@ individuals write the same cleartext, it will almost certainly be encrypted
 with different keys and thus be stored twice, once for each encryption.
 
 The list of readers for key wrapping is taken from the read access list
-described in the [Access Control](/doc/access_control.md) document.
+described in the [Access Control](access_control.md) document.
 When that list changes, wrapped keys should be removed for the dropped readers
 and extra wrapped keys made for the added readers.
 The directory server assists with this work queue, but needs cooperation of the

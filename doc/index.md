@@ -31,11 +31,11 @@ Using these elements as building blocks, Upspin provides a global name space
 for all your data and the power to expand that space to include services such
 as sensors, social media, and more.
 
-To get started, follow the [**signup process**](/doc/signup.md).
+To get started, follow the [**signup process**](signup.md).
 
 ## Documentation
 
-The [Documentation](/doc/doc.md) page holds annotated links to the
+The [Documentation](doc.md) page holds annotated links to the
 rich documentation for Upspin, which includes everything from
 user guides to details about the design and implementation.
 
@@ -61,5 +61,5 @@ mailing lists, user forums, and so on.
 ## Augie
 
 The Upspin mascot, Augie, watches over the project and its community.
-The [Mascot](/doc/mascot.md) document introduces
+The [Mascot](mascot.md) document introduces
 him and includes downloadable images and usage information.
