@@ -848,9 +848,13 @@ Usage: upspin [-config=<file>] signup -dir=<addr> -store=<addr> [flags] <usernam
        upspin [-config=<file>] signup -server=<addr> [flags] <username>
 
 Signup generates an Upspin configuration file and private/public key pair,
-stores them locally, and sends a signup request to the public Upspin key server
-at key.upspin.io. The server will respond by sending a confirmation email to
-the given email address (or "username").
+stores them locally, and sends a signup request to the key server named by
+the -key flag, which is required. That server will respond by sending a
+confirmation email to the given email address (or "username").
+
+There is no default key server. The public one at key.upspin.io was retired
+in 2025, and there is no register to be entered in unless you or someone you
+deal with runs one. See below for what to do instead.
 
 The email address becomes a username after successful signup but is never
 again used by Upspin to send or receive email. Therefore the email address
@@ -876,9 +880,8 @@ recreate or reuse prior keys.
 The -signuponly flag tells signup to skip the generation of the configuration
 file and keys and only send the signup request to the key server.
 
-Signup needs a key server. A configuration that instead pins the keys it
-trusts, with a keydir entry, has no signing up to do: there is no register
-to be entered in. Generate the keys and configuration file with keygen,
+A configuration that instead pins the keys it trusts, with a keydir entry,
+has no signing up to do. Generate the keys and configuration file with keygen,
 write out the record for the new user with
 
 	upspin user > me.yaml
@@ -898,7 +901,7 @@ Flags:
   -help
     	print more information about the command
   -key address
-    	Key server address (default "key.upspin.io:443")
+    	Key server address; required, as signing up means telling a key server
   -secrets directory
     	directory to store key pair
   -secretseed string

@@ -24,9 +24,13 @@ import (
 func (s *State) signup(args ...string) {
 	const help = `
 Signup generates an Upspin configuration file and private/public key pair,
-stores them locally, and sends a signup request to the public Upspin key server
-at key.upspin.io. The server will respond by sending a confirmation email to
-the given email address (or "username").
+stores them locally, and sends a signup request to the key server named by
+the -key flag, which is required. That server will respond by sending a
+confirmation email to the given email address (or "username").
+
+There is no default key server. The public one at key.upspin.io was retired
+in 2025, and there is no register to be entered in unless you or someone you
+deal with runs one. See below for what to do instead.
 
 The email address becomes a username after successful signup but is never
 again used by Upspin to send or receive email. Therefore the email address
@@ -52,9 +56,8 @@ recreate or reuse prior keys.
 The -signuponly flag tells signup to skip the generation of the configuration
 file and keys and only send the signup request to the key server.
 
-Signup needs a key server. A configuration that instead pins the keys it
-trusts, with a keydir entry, has no signing up to do: there is no register
-to be entered in. Generate the keys and configuration file with keygen,
+A configuration that instead pins the keys it trusts, with a keydir entry,
+has no signing up to do. Generate the keys and configuration file with keygen,
 write out the record for the new user with
 
 	upspin user > me.yaml
@@ -65,10 +68,9 @@ attesting to the record with 'upspin keysign' saves them from checking its
 fingerprint one by one. See the keytrust and keysign commands.
 `
 	fs := flag.NewFlagSet("signup", flag.ExitOnError)
-	defaultKeyServer := string(config.New().KeyEndpoint().NetAddr)
 	var (
 		force       = fs.Bool("force", false, "create a new user even if keys and config file exist")
-		keyServer   = fs.String("key", defaultKeyServer, "Key server `address`")
+		keyServer   = fs.String("key", "", "Key server `address`; required, as signing up means telling a key server")
 		dirServer   = fs.String("dir", "", "Directory server `address`")
 		storeServer = fs.String("store", "", "Store server `address`")
 		bothServer  = fs.String("server", "", "Store and Directory server `address` (if combined)")
@@ -88,6 +90,17 @@ fingerprint one by one. See the keytrust and keysign commands.
 			s.Exit(err)
 		}
 		flags.Config = filepath.Join(homedir, flags.Config)
+	}
+
+	// There is no default key server. There was, and it named a host that
+	// no longer answers; signing up is telling a particular key server
+	// about yourself, so the address has to be said out loud.
+	if *keyServer == "" {
+		s.Exitf("the -key flag must name a key server.\n" +
+			"There is no default: the central one was retired. If you are not running\n" +
+			"or using a key server, there is nothing to sign up to; generate keys with\n" +
+			"'upspin keygen', write your record out with 'upspin user', and have those\n" +
+			"who are to trust it pin it with 'upspin keytrust -add'.")
 	}
 
 	if *signupOnly {

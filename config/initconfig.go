@@ -51,9 +51,14 @@ func New() upspin.Config {
 var (
 	defaultUserName    = upspin.UserName("noone@nowhere.org")
 	defaultPacking     = upspin.EEPack
+	// defaultKeyEndpoint is unassigned. It named key.upspin.io until that
+	// server was retired; the name still resolves, so a configuration
+	// inheriting it waited on a connection that would never be accepted
+	// and then failed obscurely. Unassigned fails at once instead, and a
+	// configuration that pins the keys it trusts, with a keydir, is
+	// complete without any key server at all. See upspin.io/key/trust.
 	defaultKeyEndpoint = upspin.Endpoint{
-		Transport: upspin.Remote,
-		NetAddr:   "key.upspin.io:443",
+		Transport: upspin.Unassigned,
 	}
 )
 
@@ -108,7 +113,8 @@ func FromFile(name string) (upspin.Config, error) {
 //
 // Any endpoints (keyserver, dirserver, storeserver) not set in the data for
 // the config will be set to the "unassigned" transport and an empty network
-// address, except keyserver which defaults to "remote,key.upspin.io:443".
+// address. A configuration that names no keyserver must name a keydir, from
+// which users are then resolved; see upspin.io/key/trust.
 // If an endpoint is specified without a transport it is assumed to be
 // the address component of a remote endpoint.
 // If a remote endpoint is specified without a port in its address component
