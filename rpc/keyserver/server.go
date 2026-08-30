@@ -145,7 +145,11 @@ func (s *server) Put(session rpc.Session, reqBytes []byte) (pb.Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	op := logf(session, "Put(%v)", req)
+	// Pass the request by pointer: the generated type embeds a
+	// protoimpl.MessageState, which contains a mutex, so passing it by
+	// value would copy a lock. Every other server logs a field rather
+	// than the whole request, and does not have the problem.
+	op := logf(session, "Put(%v)", &req)
 	s.incPutCounters()
 
 	user := proto.UpspinUser(req.User)
