@@ -9,11 +9,9 @@ with a link back to [upspin.io](https://upspin.io).
 
 <hr>
 
-<center>
-  <img src="images/augie-transparent.png" height="300">
+![Augie](images/augie-transparent.png)
 
-  <h3>[Download Augie](images/augie.zip)</h3>
-</center>
+### [Download Augie](images/augie.zip)
 
 <hr>
 
