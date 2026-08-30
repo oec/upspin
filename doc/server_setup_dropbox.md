@@ -31,9 +31,9 @@ local$ GOOS=linux GOARCH=amd64 go build dropbox.upspin.io/cmd/upspinserver-dropb
 
 1. Visit the following [site](https://www.dropbox.com/oauth2/authorize?client_id=wt1281n3q768jj3&response_type=code).
 2. If necessary, log in with your Dropbox credentials and click on "Allow".
-   ![Allow Upspin storage server to access Dropbox](images/dropbox/allow.png)
+   <img src="images/dropbox/allow.png" alt="Allow Upspin storage server to access Dropbox"/>
 3. Copy the displayed authorization code.
-   ![Dropbox API code](images/dropbox/code.png)
+   <img src="images/dropbox/code.png" alt="Dropbox API code"/>
 
 Now run the `upspin-setupstorage-dropbox` command and pass the previously copied code as
 argument:

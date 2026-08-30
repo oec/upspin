@@ -1,6 +1,6 @@
 # Upspin
 
-![Home](images/augie-transparent.png)
+<img src="images/augie-transparent.png" width="180" height="218" alt="Home"/>
 
 When did you last...
 
