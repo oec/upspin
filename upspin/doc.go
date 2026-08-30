@@ -43,10 +43,12 @@ Finally, the Client interface provides a coherent high-level file-like API
 that, internally, calls upon the other services to access and manage the data.
 Most applications using Upspin will talk to the Client interface alone.
 
-Most users of Upspin will use the public KeyServer at key.upspin.io
-to hold their public keys, but run private DirServers and StoreServers.
-The shared key server combined with uniform interfaces provide a
-consistent public view of the system.
+Users of Upspin once shared a public KeyServer at key.upspin.io to hold their
+public keys, while running private DirServers and StoreServers. That server was
+retired in 2025. A configuration now either names a KeyServer of its own or
+resolves users from records it has pinned locally, which package
+upspin.io/key/trust describes. The uniform interfaces are unchanged either way;
+what changed is where the answer about a user comes from.
 
 Many of the methods of the types in this package accept or return slices or
 pointers to data structures. It is a requirement that all implementations of

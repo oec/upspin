@@ -74,6 +74,12 @@ We are aware of the problems of a single point of failure that a
 central key server represents, but feel that with suitable
 engineering the risk can be mitigated.
 
+> In the event the risk was not mitigated: the central server was retired in
+> 2025 and the single point of failure duly failed. A configuration may now
+> pin the records it trusts, and accept records attested by a key it has pinned
+> for a domain, which removes the ambiguity this section is concerned with
+> without a central register. See `go doc upspin.io/key/trust`.
+
 The key server is a very simple service, and it could
 easily be replaced with another implementation.
 We hope one day to replace the existing server with
@@ -202,7 +208,7 @@ That second level of encryption is done using an
 [elliptic curve algorithm](https://www.imperialviolet.org/2010/12/04/ecc.html),
 which uses distinct keys for encrypting and decrypting.
 The key for that encryption is the writer's _public_ key, the one
-saved in the key server at [key.upspin.io](key.upspin.io).
+saved in a key server, or pinned by those who are to trust it.
 This approach means that only the person with the corresponding
 _private_ key—the owner of the file—can recover the file
 key and use it to decrypt the original data.
@@ -315,7 +321,7 @@ The questions here cover the main points at a high level.
 ### How are keys set up? {#keys}
 
 Every user has two keys.
-A public one is stored in the key server at `key.upspin.io` and is visible to anyone.
+A public one is stored in a key server, or pinned by those who trust it, and is visible to anyone.
 A secret key is coupled to the public key but is stored only on the local machine.
 It should never be shared with anyone or published.
 It should also be kept safely; if you lose it, you lose all access to Upspin, including
@@ -358,9 +364,12 @@ You can test that this has succeeded by running,
 $ upspin user
 ```
 
-This command will show you your configuration and also compare it with
-the record stored in the public key server at `key.upspin.io`.
+This command will show you your configuration and also compare it with the
+record your key server holds, if your configuration names one.
 If there is any discrepancy, it will let you know.
+Where keys are pinned rather than served, `upspin keytrust -check` does the
+corresponding job: it compares each pinned record with what its owner publishes
+now, and reports any that no longer agree.
 
 ### How do I recreate my keys and config on another machine? {#recreate-keys}
 
@@ -405,8 +414,9 @@ We believe the system is more secure by not providing one.
 
 If you decide to stop using Upspin, there is no need to remove anything from the key server.
 
-The [transaction log](https://key.upspin.io/log) is cryptographically protected by a hash chain,
+A key server's transaction log is cryptographically protected by a hash chain,
 so deletions are impossible anyway.
+(The project's own log, at `key.upspin.io/log`, went with the server in 2025.)
 This protects you from an adversary removing your public key and
 re-registering the account with their own key,
 locking you out and tricking your friends into leaking secrets.
@@ -479,9 +489,12 @@ Here the "other person" is you with your new key identity.
 After this command, files in your tree can be read and verified by
 anyone who knows your old or your new public key.
 
-The `rotate` command pushes the new key to the public key server at `key.upspin.io`,
-making it visible to others,
-who must now use your new key when sharing files with you.
+The `rotate` command pushes the new key to your key server, making it visible
+to others, who must now use your new key when sharing files with you.
+Where keys are pinned rather than served there is nothing to push, and the
+people holding your old record will not learn of the change until they look:
+`upspin keytrust -check` is how they look, and until they do, files they share
+with you are wrapped to a key you no longer hold.
 If there is a file you wrote (and signed) in someone else's tree a long time ago and have not updated,
 readers will see an error because the signature will no longer verify;
 this can be fixed by running the `share` command.

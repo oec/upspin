@@ -28,8 +28,14 @@ This document describes the process for creating an Upspin installation by deplo
 an `upspinserver`, a combined Upspin Store and Directory server, to
 a Linux-based machine.
 
-The installation will use the central Upspin key server (`key.upspin.io`) for
-authentication, which permits inter-operation with other Upspin servers.
+These instructions were written for an installation using the central Upspin
+key server, `key.upspin.io`, which was retired in 2025. Where they say to
+register with it, you must instead name a key server of your own, or give the
+server a `KeyDir` in its `serverconfig.json` and pin the users it is to
+authenticate; the two arrangements are described in
+[the config file](/doc/config.md) and in `go doc upspin.io/key/trust`.
+A server with a key directory needs no key server at all: that directory is in
+effect the list of users it will authenticate.
 
 There are multiple versions of `upspinserver`, each depending on where the
 associated storage is kept, either on the server's local disk or with a cloud
@@ -73,10 +79,14 @@ To deploy an `upspinserver` you need to decide on values for:
 
 ## Sign up for an Upspin account {#signup}
 
-To register your public key with the central key server run `upspin signup`,
-passing your chosen host name as its `-server` argument
-and your chosen Upspin user name as its final argument.
-Then follow the onscreen instructions.
+To register your public key with a key server run `upspin signup`, passing that
+server's address as its `-key` argument, which is required, your chosen host
+name as its `-server` argument, and your chosen Upspin user name as its final
+argument. Then follow the onscreen instructions.
+
+With no key server, generate the keys with `upspin keygen` and exchange records
+by hand, as [Signing up a new user](/doc/signup.md) describes; there is nothing
+to register with.
 
 The [Signing up a new user](/doc/signup.md) document describes this process in
 detail.
@@ -85,8 +95,8 @@ If you change your mind about the host name, you can update with `upspin user -p
 ## Set up your domain {#domain}
 
 Upspin servers also run as Upspin users, with all the rights and requirements
-that demands, and so they need usernames and key pairs registered with the
-Upspin key server.
+that demands, and so they need usernames and key pairs, registered with a key
+server or pinned in the key directories of those who talk to them.
 The Upspin user for your server is typically under the domain you are setting up.
 
 You need not use the signup process to create users for your servers.

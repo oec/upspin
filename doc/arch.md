@@ -13,8 +13,10 @@ references that point to data in the store server:
 
 <img src="/images/arch/dirstore.png" width="674" alt="Directory and Store server diagram"/>
 
-All the users are connected through a central key server at `key.upspin.io`,
-which holds the public key and directory server address for each user.
+All the users are connected through a key server, which holds the public key and
+directory server address for each user. The project ran a central one at
+`key.upspin.io` until 2025; a configuration now names its own, or pins the
+records it trusts locally instead. See [the config file](/doc/config.md).
 
 <img src="/images/arch/key.png" width="527" alt="Key server diagram"/>
 
@@ -36,11 +38,13 @@ of requests a client exchanges with the servers to read the file
 
 1. The client asks the key server for the record describing the owner of the
    file, which is the user name at the beginning of the file name (`augie@upspin.io`).
-   The key server's response contains the name of the directory server holding
-   that user's tree (`dir.upspin.io`) and Augie's public key.
+   The response contains the name of the directory server holding that user's
+   tree and Augie's public key. (The diagrams name `dir.upspin.io` and
+   `store.upspin.io`, the servers the project ran; read them as stand-ins for
+   whichever servers a deployment uses.)
 2. The client asks the directory server for the directory entry describing the
    file. The response contains a list of block references, which include the
-   name of the store server (`store.upspin.io`).
+   name of the store server.
 3. The client can then ask the store server for each of the blocks, pipelining
    the requests for efficiency.
 4. The client decrypts the blocks (using Augie's public key) and concatenates

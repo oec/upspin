@@ -1,5 +1,14 @@
 # Signing up a new user
 
+> **The central key server is gone.**
+> `key.upspin.io` was retired in 2025, so there is no public register to sign
+> up to and no confirmation email to receive.
+> What remains is generating a key pair, which is unchanged, and then making
+> your public key known to the people you deal with.
+> This document describes both: registering with a key server, if you or they
+> run one, and the alternative, in which each side pins the keys it trusts.
+> See [the config file](/doc/config.md) and `go doc upspin.io/key/trust`.
+
 ## Introduction
 
 Before you sign up, you may want to read the
@@ -40,17 +49,17 @@ You will need to choose an Upspin user name, which is just an email address you
 own.
 Your user name is how the Upspin system and its users will identify you and your
 files.
-Note that your chosen user name will become a matter of public record in our
-[key server log](https://key.upspin.io/log).
+If you register with a key server, your chosen user name becomes a matter of
+public record in that server's log.
 
 Any valid email address is almost certainly a valid Upspin user name
 (see [the faq](faq.md#email-restrictions) for the exceptions to this).
 
 > You may use your regular email address or an Upspin-specific one; either way
 > is fine.
-> The address is published in key server logs as well as in any Upspin path
-> name you share, so be sure your email account has whatever spam, anonymity,
-> or other protection you feel is necessary.
+> The address appears in any Upspin path name you share, and in a key server's
+> log if you use one, so be sure your email account has whatever spam,
+> anonymity, or other protection you feel is necessary.
 >
 > No email will be sent to the address after this signup step. All future
 > Upspin operations, even updating later to a new key pair, will be validated
@@ -66,15 +75,14 @@ make sure to ask the administrator to add your user name to the server's
 This will grant you permission to create your user root in that directory
 server and store data in that store server.
 
-**Start the `upspin-ui` program to start the signup process.**
+**Generate your key pair.**
 
-The first step asks for your user name, generates a key pair (one secret key,
-one public key), saves the keys locally, and sends your details, including
-your public key, to the key server.
-The public key is published to the shared Upspin key server, but the secret key
-is stored only on your local computer.
+	upspin keygen -secretseed "" $HOME/.ssh/you@example.com
 
-After generating your key pair, `upspin-ui` will display a "secret seed" that
+This writes `public.upspinkey` and `secret.upspinkey` to that directory. The
+secret key never leaves your computer.
+
+`keygen` prints a "secret seed" that
 serves as a human-readable version of the key.
 (The computer-readable version is just a very long number.)
 **Write down this secret seed, keep it somewhere safe and do not lose it. It is
@@ -82,9 +90,9 @@ literally your key to Upspin.**
 
 > Upspin's security model is based on public key encryption, in which each
 > Upspin user has a pair of keys called the public and private keys.
-> The public key is registered with the public key server and is available to
-> everyone, while the private key is kept in secret by the user, such as on a
-> local workstation or other private device.
+> The public key is meant to be known to everyone, while the private key is
+> kept in secret by the user, such as on a local workstation or other private
+> device.
 >
 > It is vital that you do not lose or share your secret key or its "secret
 > seed" (which is equivalent to the key itself).
@@ -96,10 +104,13 @@ literally your key to Upspin.**
 > The high security that Upspin offers would be compromised if
 > there were an account recovery mechanism.
 
-The second step is to receive an email message from the key server and to click
-the confirmation link that it contains.
-Visiting that link proves to the key server that you control the email address
-that you are registering and completes the signup process.
+**Then make your public key known.** There are two ways, and which one applies
+depends on whether anyone you deal with runs a key server.
+
+*With a key server.* Run `upspin signup -key=<address> -dir=<address>
+-store=<address> you@example.com`. The `-key` flag is required; there is no
+default. That server sends a confirmation email, and visiting the link in it
+proves you control the address and completes the registration.
 
 > From here on, the email address serves as your Upspin user name.
 > However, after this account verification step Upspin will never use it as an
@@ -109,7 +120,29 @@ that you are registering and completes the signup process.
 > In fact, even if the email account is later hijacked, the
 > attacker will not be able to get access to your Upspin account.
 
+*Without one.* There is nothing to register with, so instead you hand your
+record to the people who are to trust it. Write it out with
+
+	upspin user > you.yaml
+
+and send them the file by any means; they pin it with
+
+	upspin keytrust -add -fingerprint=<fingerprint> -in=you.yaml
+
+after checking the fingerprint, which `upspin user` also prints, against a copy
+you give them by some route an attacker does not control. If your domain has a
+trust anchor, signing the record with `upspin keysign` saves each of them that
+check. See `go doc upspin.io/key/trust`.
+
 ## Nominate (and maybe deploy) your Upspin servers {#deploy}
+
+> The `upspin-ui` program referred to below lives in a separate repository, and
+> its option to deploy to the Google Cloud Platform depends on storage backends
+> that have moved out of this one; only the local disk backend remains here.
+> To set up a server by hand, and with local storage, follow
+> [Setting up `upspinserver`](/doc/server_setup.md) instead.
+> The `dirserver:` and `storeserver:` lines it describes are the same either
+> way; see [the config file](/doc/config.md).
 
 Next you need to decide whether you are going to deploy your own Upspin
 directory and store servers, use those maintained by someone else, or

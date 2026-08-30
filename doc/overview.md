@@ -219,8 +219,8 @@ in the system.
 It also holds the network address for the directory server holding each user's
 tree.
 For the global Upspin ecosystem, this service is provided by a server running
-at `key.upspin.io`.
-All users can save their public keys there, and can in turn ask the key server
+at `key.upspin.io`, retired in 2025.
+All users could save their public keys there, and could in turn ask the key server
 for the public keys of any other user in the system.
 
 2) A storage server.
@@ -241,7 +241,10 @@ Moreover, the separation of storage and naming means that the directory
 structure for a single user is a modest amount of data even when it references
 many large files.
 
-In summary, `key.upspin.io` provides a single place to store all public keys.
+In summary, a key server provides a single place to store all public keys.
+The project ran one at `key.upspin.io`; since it was retired, a configuration
+names its own or pins the records it trusts locally, which is described in
+[the config file](/doc/config.md) and in `go doc upspin.io/key/trust`.
 Users' actual data is stored across multiple directory and storage servers in
 the network; these servers are run by the users themselves (or by agents on
 their behalf).
@@ -253,7 +256,7 @@ like this:
 
 *   Extract the user name of its owner, which is always the beginning of
 the Upspin name: `ann@example.com`.
-*   Look up `ann@example.com` in the key server at `key.upspin.io` to find the
+*   Look up `ann@example.com` in the key server to find the
 network address of her directory server.
 *   Contact that directory server and ask it to evaluate the full Upspin name.
 It returns the network address of the storage server holding the contents, and
@@ -389,7 +392,7 @@ servers and the local client.
 This implement exactly the same interfaces, so its existence is transparent to
 the client.
 
-At `key.upspin.io` we run a `KeyServer` and allow authenticated users to
+At `key.upspin.io` the project ran a `KeyServer` that allowed authenticated users to
 register there and share in that name space.
 We encourage anyone interested in using the system to register.
 
@@ -411,8 +414,8 @@ The private key is kept private and is the user's responsibility to save and
 maintain.
 The public key on the other hand must be made public so all participating
 servers can authenticate the user.
-The public key is made truly public by creating a user record to hold it in the
-key server at [key.upspin.io](https://key.upspin.io).
+The public key is made public by creating a user record to hold it, either in a
+key server, or in the local key directories of those who are to trust it.
 The process for doing this is described in a
 [separate document](/doc/signup.md).
 

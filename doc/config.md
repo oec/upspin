@@ -133,8 +133,11 @@ If the packing is not set in the config file, `ee` is assumed.
 
 * The **`keyserver`** setting names the key server used to discover other
 user's public keys.
-Almost always, this will be to the Upspin global key server, `key.upspin.io`,
-and so if the keyserver is not named in the config file, that is the default.
+There is no default: it once named the global key server at `key.upspin.io`,
+which was retired in 2025, so a configuration inheriting that default waited on
+a host that no longer answers.
+A configuration that names no key server must name a `keydir` instead, from
+which users are resolved; naming neither is an error, reported at once.
 
 * The **`dirserver`** setting names the directory server holding the user's
 Upspin directory tree.

@@ -59,8 +59,11 @@ ciphertext.
 
 A username list {U} is assembled including Bob, Alice, and any others granted
 read access to items in the path name's directory.
-Alice looks up each of the username's public key P(U) from (a local cache of) a
-centralized `KeyServer` running at `key.upspin.io`.
+Alice looks up each of the username's public key P(U) through her `KeyServer`
+chain: the records she has pinned locally, then anything published for those
+users, then a key server if her configuration names one.
+(This was a single centralized `KeyServer` at `key.upspin.io` until that server
+was retired; see "Trusting keys without a key server" below.)
 Alice wraps *dkey* for each reader, annotated with a hash of that user's public
 key.
 (Alice shares with others using ciphersuites she considers adequate, say
@@ -148,25 +151,31 @@ storage server.
 
 ## Key Management
 
-An Upspin user joins the system by publishing a key to a central key server.
-We believe a global collection of public key bindings is the best way to
-promote easy sharing between strangers, and we think this need extends
-beyond Upspin.
-We're running our own key server for the moment but anticipate converting to
+Upspin was designed around a central key server, which a user joined by
+publishing a key to it.
+A global collection of public key bindings is the best way to promote easy
+sharing between strangers, and that need extends beyond Upspin.
+The project ran its own, at `key.upspin.io`, and anticipated converting to
 [Key Transparency](https://security.googleblog.com/2017/01/security-through-transparency.html)
-or whatever other strong system becomes most popular.
+or whatever other strong system became most popular.
 
-Our key server enables detection of tampering by
-publishing a full, incrementally hashed transaction log at
-[https://key.upspin.io/log](https://key.upspin.io/log).
-If you can confirm a friend's public key some other way, compare it
-to what is stored at key.upspin.io and
-report to us and the public if you ever find a mismatch.
-Compare the key.upspin.io/log hash you see with what your friend sees,
-and report any discrepancy.
-Watch for your own key in the log and report if there's ever a change, even
-momentary, that you did not initiate yourself.
-You'll be giving the rest of our users herd immunity.
+That server was retired in 2025, so the arrangement described in the rest of
+this section is history rather than instruction; what a configuration does
+today is described under "Trusting keys without a key server" below.
+It is worth reading all the same, because the property it was reaching for —
+that a substituted key should be detectable — is the same property the trust
+anchors provide, by a different route.
+
+That key server enabled detection of tampering by publishing a full,
+incrementally hashed transaction log at `key.upspin.io/log`.
+Users were asked to confirm a friend's public key by some other means and
+compare it with what the server held, to compare the log's hash with what their
+friends saw, and to watch for any change to their own key that they had not
+initiated: a hash chain nobody reads detects nothing, so the checking was the
+mechanism, not a courtesy.
+The same duty falls on whoever pins a key today, which is why `upspin user`
+prints a fingerprint to compare and `upspin keytrust -check` looks for pinned
+records that no longer match what their owners publish.
 
 ### Trusting keys without a key server
 
