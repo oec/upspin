@@ -748,10 +748,20 @@ func TestCleanup(t *testing.T) {
 }
 
 // bytesUsed does a recursive walk of the cache directories summing the bytes used.
+//
+// The cache is evicting files as we walk. That is what the caller is
+// provoking: it writes far more than the cache can hold, and eviction happens
+// in cf.close, on the goroutine serving the FUSE release, which close(2) does
+// not wait for. A file that has gone between the reading of its directory and
+// the stat of it is therefore ordinary here, and must not fail the test. The
+// cache directory itself going missing still must.
 func bytesUsed(t *testing.T, dir string) int64 {
 	var sum int64
 	fn := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) && path != dir {
+				return nil
+			}
 			return err
 		}
 		sum += info.Size()
