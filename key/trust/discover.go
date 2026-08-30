@@ -49,7 +49,9 @@ import (
 // an attacker who controls a resolver, or who obtains a certificate for a host
 // of their choosing, can redirect the fetch and still not change a key. It is
 // also why discovery cannot use a key server's RPC interface, whose reply
-// carries no signature: see the note on ErrNoAttestation below.
+// carries no signature: a record fetched that way would have to be believed
+// because of where it came from, which is the one thing discovery must never
+// do.
 
 // DiscoveryConfigKey enables discovery of published records over DNS and
 // HTTPS. It is off unless the configuration sets it.
