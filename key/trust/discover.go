@@ -65,13 +65,8 @@ const WellKnownPath = "/.well-known/upspin/keys"
 // friendly.
 const maxBundleSize = 1 << 24 // 16MB
 
-// lookupSRV is the DNS lookup used to find where a domain publishes its
-// records. It aliases net.LookupSRV except in tests.
-var lookupSRV = net.LookupSRV
-
-// httpClientFor returns the HTTP client used to fetch published records. It is
-// a variable so that tests can supply a client that trusts a test server.
-var httpClientFor = func(cfg upspin.Config) (*http.Client, error) {
+// httpClientFor returns the HTTP client used to fetch published records.
+func httpClientFor(cfg upspin.Config) (*http.Client, error) {
 	// Honour the tlscerts setting, so that a domain serving its records
 	// under a certificate of its own can be reached without the public
 	// certificate authorities. This is defence in depth: the attestation
@@ -131,8 +126,33 @@ func ParseBundle(data []byte) ([][]byte, error) {
 
 // discovery holds what has been discovered, one entry per domain.
 type discovery struct {
+	// lookupSRV and httpClient are what reach the network. They are nil
+	// in ordinary use, standing for net.LookupSRV and httpClientFor;
+	// tests set them to answer without a network. Both are set when the
+	// discovery is built and not changed after, so they need no lock and
+	// no test has to write a package-level variable to reach them.
+	lookupSRV  func(service, proto, name string) (string, []*net.SRV, error)
+	httpClient func(cfg upspin.Config) (*http.Client, error)
+
 	mu      sync.Mutex
 	domains map[string]*published
+}
+
+// srv looks up a domain's SRV records, through whatever the discovery was
+// given for the purpose.
+func (d *discovery) srv(service, proto, name string) (string, []*net.SRV, error) {
+	if d.lookupSRV != nil {
+		return d.lookupSRV(service, proto, name)
+	}
+	return net.LookupSRV(service, proto, name)
+}
+
+// client returns the HTTP client to fetch with, likewise.
+func (d *discovery) client(cfg upspin.Config) (*http.Client, error) {
+	if d.httpClient != nil {
+		return d.httpClient(cfg)
+	}
+	return httpClientFor(cfg)
 }
 
 // published is what a single domain has been found to publish. A name present
@@ -177,7 +197,7 @@ func (d *discovery) lookup(cfg upspin.Config, keyDir string, name upspin.UserNam
 		p.lastTry = time.Now()
 		d.mu.Unlock()
 
-		users := fetchDomain(cfg, keyDir, domain, name)
+		users := d.fetchDomain(cfg, keyDir, domain, name)
 
 		d.mu.Lock()
 		if users != nil {
@@ -201,7 +221,7 @@ func (d *discovery) lookup(cfg upspin.Config, keyDir string, name upspin.UserNam
 	p.busy = true
 	d.mu.Unlock()
 
-	u = fetchUser(cfg, keyDir, domain, name)
+	u = d.fetchUser(cfg, keyDir, domain, name)
 
 	d.mu.Lock()
 	p.users[name] = u // Remember a miss too, as a nil entry.
@@ -229,10 +249,10 @@ func (d *discovery) peek(name upspin.UserName) *upspin.User {
 
 // fetchDomain returns everything a domain publishes in a bundle, or nil if it
 // publishes no bundle that can be read.
-func fetchDomain(cfg upspin.Config, keyDir, domain string, want upspin.UserName) map[upspin.UserName]*upspin.User {
+func (d *discovery) fetchDomain(cfg upspin.Config, keyDir, domain string, want upspin.UserName) map[upspin.UserName]*upspin.User {
 	const op errors.Op = "key/trust.fetchDomain"
-	for _, base := range baseURLs(domain) {
-		data, err := fetch(cfg, base)
+	for _, base := range d.baseURLs(domain) {
+		data, err := d.fetch(cfg, base)
 		if err != nil {
 			log.Debug.Printf("%s: %s: %v", op, base, err)
 			continue
@@ -267,10 +287,10 @@ func fetchDomain(cfg upspin.Config, keyDir, domain string, want upspin.UserName)
 }
 
 // fetchUser returns the single record a domain publishes for name, or nil.
-func fetchUser(cfg upspin.Config, keyDir, domain string, name upspin.UserName) *upspin.User {
+func (d *discovery) fetchUser(cfg upspin.Config, keyDir, domain string, name upspin.UserName) *upspin.User {
 	const op errors.Op = "key/trust.fetchUser"
-	for _, base := range baseURLs(domain) {
-		data, err := fetch(cfg, base+"/"+url.PathEscape(string(name)))
+	for _, base := range d.baseURLs(domain) {
+		data, err := d.fetch(cfg, base+"/"+url.PathEscape(string(name)))
 		if err != nil {
 			log.Debug.Printf("%s: %s: %v", op, name, err)
 			continue
@@ -292,9 +312,9 @@ func fetchUser(cfg upspin.Config, keyDir, domain string, name upspin.UserName) *
 // baseURLs returns the URLs beneath which a domain may publish its records, in
 // the order they should be tried: those named by the domain's SRV records
 // first, then the domain itself, which needs no DNS record of its own.
-func baseURLs(domain string) []string {
+func (d *discovery) baseURLs(domain string) []string {
 	var urls []string
-	_, srvs, err := lookupSRV("upspin", "tcp", domain)
+	_, srvs, err := d.srv("upspin", "tcp", domain)
 	if err == nil {
 		for _, srv := range srvs {
 			host := strings.TrimSuffix(srv.Target, ".")
@@ -313,9 +333,9 @@ func baseURLs(domain string) []string {
 }
 
 // fetch returns the body of an HTTPS GET, bounded in size.
-func fetch(cfg upspin.Config, url string) ([]byte, error) {
+func (d *discovery) fetch(cfg upspin.Config, url string) ([]byte, error) {
 	const op errors.Op = "key/trust.fetch"
-	client, err := httpClientFor(cfg)
+	client, err := d.client(cfg)
 	if err != nil {
 		return nil, errors.E(op, err)
 	}

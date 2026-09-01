@@ -16,25 +16,24 @@ import (
 	"upspin.io/upspin"
 )
 
-// serve installs a fake HTTP transport that answers only the given URLs, and a
-// fake SRV lookup that answers only for the given domain, and undoes both when
-// the test ends. Nothing here touches the network.
-func serve(t *testing.T, srv map[string][]*net.SRV, pages map[string]string) {
+// serve returns a discovery that answers from the given SRV records and pages
+// and reaches no network. It replaces nothing global, so tests that use it
+// stay independent of one another and may be run in parallel.
+func serve(t *testing.T, srv map[string][]*net.SRV, pages map[string]string) *discovery {
 	t.Helper()
-	oldSRV, oldClient := lookupSRV, httpClientFor
-	t.Cleanup(func() { lookupSRV, httpClientFor = oldSRV, oldClient })
-
-	lookupSRV = func(service, proto, name string) (string, []*net.SRV, error) {
-		if service != "upspin" || proto != "tcp" {
-			t.Errorf("lookupSRV(%q, %q, ...); want (upspin, tcp, ...)", service, proto)
-		}
-		if s, ok := srv[name]; ok {
-			return "", s, nil
-		}
-		return "", nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
-	}
 	client := &http.Client{Transport: fakeTransport(pages)}
-	httpClientFor = func(upspin.Config) (*http.Client, error) { return client, nil }
+	return &discovery{
+		lookupSRV: func(service, proto, name string) (string, []*net.SRV, error) {
+			if service != "upspin" || proto != "tcp" {
+				t.Errorf("lookupSRV(%q, %q, ...); want (upspin, tcp, ...)", service, proto)
+			}
+			if s, ok := srv[name]; ok {
+				return "", s, nil
+			}
+			return "", nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+		},
+		httpClient: func(upspin.Config) (*http.Client, error) { return client, nil },
+	}
 }
 
 type fakeTransport map[string]string
@@ -140,7 +139,7 @@ func TestBundle(t *testing.T) {
 
 func TestDiscoverBundle(t *testing.T) {
 	dir, record := anchored(t)
-	serve(t,
+	d := serve(t,
 		map[string][]*net.SRV{
 			"example.com": {{Target: "keys.example.com.", Port: 443}},
 		},
@@ -148,7 +147,6 @@ func TestDiscoverBundle(t *testing.T) {
 			"https://keys.example.com" + WellKnownPath: bundleOf(t, record),
 		})
 
-	var d discovery
 	got := d.lookup(config.New(), dir, "carol@example.com")
 	if got == nil {
 		t.Fatal("lookup found nothing")
@@ -168,11 +166,10 @@ func TestDiscoverBundle(t *testing.T) {
 // domain that serves its records from its own web server.
 func TestDiscoverWellKnown(t *testing.T) {
 	dir, record := anchored(t)
-	serve(t, nil, map[string]string{
+	d := serve(t, nil, map[string]string{
 		"https://example.com" + WellKnownPath: bundleOf(t, record),
 	})
 
-	var d discovery
 	if got := d.lookup(config.New(), dir, "carol@example.com"); got == nil {
 		t.Fatal("lookup found nothing at the well-known path")
 	}
@@ -182,12 +179,11 @@ func TestDiscoverWellKnown(t *testing.T) {
 // file per user rather than a bundle.
 func TestDiscoverSingleRecord(t *testing.T) {
 	dir, record := anchored(t)
-	serve(t, nil, map[string]string{
+	d := serve(t, nil, map[string]string{
 		// No bundle at the base; only the per-user file.
 		"https://example.com" + WellKnownPath + "/carol@example.com": string(record),
 	})
 
-	var d discovery
 	if got := d.lookup(config.New(), dir, "carol@example.com"); got == nil {
 		t.Fatal("lookup did not fall back to the per-user record")
 	}
@@ -216,24 +212,22 @@ func TestDiscoveryTrustsOnlyTheAnchor(t *testing.T) {
 	t.Run("hostile SRV target", func(t *testing.T) {
 		// DNS sends the lookup to a host in another domain entirely,
 		// which answers with a well-formed but wrongly signed record.
-		serve(t,
+		d := serve(t,
 			map[string][]*net.SRV{
 				"example.com": {{Target: "keys.attacker.example.", Port: 443}},
 			},
 			map[string]string{
 				"https://keys.attacker.example" + WellKnownPath: bundleOf(t, forged),
 			})
-		var d discovery
 		if got := d.lookup(config.New(), dir, "carol@example.com"); got != nil {
 			t.Errorf("lookup accepted %v from a host named by DNS", got.Name)
 		}
 	})
 
 	t.Run("unattested record", func(t *testing.T) {
-		serve(t, nil, map[string]string{
+		d := serve(t, nil, map[string]string{
 			"https://example.com" + WellKnownPath: bundleOf(t, plain),
 		})
-		var d discovery
 		if got := d.lookup(config.New(), dir, "carol@example.com"); got != nil {
 			t.Errorf("lookup accepted an unattested record: %v", got.Name)
 		}
@@ -253,10 +247,9 @@ func TestDiscoveryTrustsOnlyTheAnchor(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		serve(t, nil, map[string]string{
+		d := serve(t, nil, map[string]string{
 			"https://example.com" + WellKnownPath: bundleOf(t, record),
 		})
-		var d discovery
 		if got := d.lookup(config.New(), dir, "carol@other.example"); got != nil {
 			t.Errorf("example.com answered for %v", got.Name)
 		}
@@ -267,10 +260,9 @@ func TestDiscoveryTrustsOnlyTheAnchor(t *testing.T) {
 // directory: with no anchors pinned, nothing discovered could be checked.
 func TestDiscoveryNeedsKeyDir(t *testing.T) {
 	_, record := anchored(t)
-	serve(t, nil, map[string]string{
+	d := serve(t, nil, map[string]string{
 		"https://example.com" + WellKnownPath: bundleOf(t, record),
 	})
-	var d discovery
 	if got := d.lookup(config.New(), "", "carol@example.com"); got != nil {
 		t.Errorf("lookup = %v with no key directory; want nil", got)
 	}
@@ -279,7 +271,7 @@ func TestDiscoveryNeedsKeyDir(t *testing.T) {
 // TestBaseURLs covers the shape of the URLs tried, including the port and the
 // order: what DNS names first, then the domain itself.
 func TestBaseURLs(t *testing.T) {
-	serve(t, map[string][]*net.SRV{
+	d := serve(t, map[string][]*net.SRV{
 		"example.com": {
 			{Target: "a.example.com.", Port: 443},
 			{Target: "b.example.com.", Port: 8443},
@@ -287,7 +279,7 @@ func TestBaseURLs(t *testing.T) {
 		},
 	}, nil)
 
-	got := baseURLs("example.com")
+	got := d.baseURLs("example.com")
 	want := []string{
 		"https://a.example.com" + WellKnownPath,
 		"https://b.example.com:8443" + WellKnownPath,
@@ -303,7 +295,7 @@ func TestBaseURLs(t *testing.T) {
 	}
 
 	// A domain with no SRV record is still asked directly.
-	if got := baseURLs("nodns.example"); len(got) != 1 || got[0] != "https://nodns.example"+WellKnownPath {
+	if got := d.baseURLs("nodns.example"); len(got) != 1 || got[0] != "https://nodns.example"+WellKnownPath {
 		t.Errorf("baseURLs with no SRV = %v", got)
 	}
 }
