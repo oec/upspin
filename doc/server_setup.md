@@ -36,6 +36,10 @@ authenticate; the two arrangements are described in
 [the config file](config.md) and in `go doc upspin.io/key/trust`.
 A server with a key directory needs no key server at all: that directory is in
 effect the list of users it will authenticate.
+`KeySets` in the same file names Upspin directories of published records, so
+that the list need not be maintained by hand: a record from a set is used only
+if it is attested by an anchor pinned in `KeyDir`, so pinning one domain's
+anchor admits every user that domain publishes.
 
 There are multiple versions of `upspinserver`, each depending on where the
 associated storage is kept, either on the server's local disk or with a cloud

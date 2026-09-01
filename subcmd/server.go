@@ -33,6 +33,14 @@ type ServerConfig struct {
 	// If it is not an absolute path it is taken relative to the server
 	// configuration directory.
 	KeyDir string
+
+	// KeySets optionally names Upspin directories of published user
+	// records, consulted after KeyDir and before the KeyServer. A record
+	// from one is used only if it is attested by a trust anchor pinned in
+	// KeyDir, so a server can admit every user in a domain by pinning that
+	// domain's anchor once rather than pinning each user in turn. See
+	// upspin.io/key/trust.
+	KeySets []string
 }
 
 // ServerConfigFile specifies the file name of the JSON-encoded ServerConfig.

@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	yaml "gopkg.in/yaml.v2"
+
 	"upspin.io/client"
 	"upspin.io/config"
 	dirServer "upspin.io/dir/server"
@@ -89,6 +91,45 @@ const (
 	setupServer
 )
 
+// setTrust applies to cfg the settings that decide which user records the
+// server believes: KeyDir, a directory of pinned records, and KeySets,
+// directories of published ones. Both are described by go doc
+// upspin.io/key/trust.
+//
+// For a server the pinned directory is in effect the list of users it will
+// authenticate, since every Dir and Store method verifies the caller's request
+// signature against their key. The key sets extend that list without extending
+// it by hand: a record from a set is used only if it is attested by an anchor
+// pinned in KeyDir, so pinning one domain's anchor admits every user in that
+// domain as its owner publishes them.
+//
+// A relative KeyDir is taken relative to the server configuration directory,
+// dir. The sets are Upspin path names and are used as they stand.
+func setTrust(cfg upspin.Config, serverConfig *subcmd.ServerConfig, dir string) (upspin.Config, error) {
+	if serverConfig.KeyDir != "" {
+		keyDir := serverConfig.KeyDir
+		if !filepath.IsAbs(keyDir) {
+			keyDir = filepath.Join(dir, keyDir)
+		}
+		cfg = config.SetValue(cfg, trust.ConfigKey, keyDir)
+	}
+	if len(serverConfig.KeySets) > 0 {
+		// The configuration value is the YAML list that a client
+		// configuration file would hold, since that is what
+		// trust.Sets parses.
+		sets, err := yaml.Marshal(serverConfig.KeySets)
+		if err != nil {
+			return nil, err
+		}
+		cfg = config.SetValue(cfg, trust.SetsConfigKey, string(sets))
+	}
+	// Reject here what a lookup would otherwise reject one user at a time.
+	if _, err := trust.Sets(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
 func initServer(mode initMode) (*subcmd.ServerConfig, upspin.Config, *perm.Perm, error) {
 	serverConfig, err := readServerConfig()
 	if os.IsNotExist(err) {
@@ -120,16 +161,9 @@ func initServer(mode initMode) (*subcmd.ServerConfig, upspin.Config, *perm.Perm,
 		})
 	}
 
-	// A directory of pinned user records, consulted before the key server.
-	// For a server this directory is in effect the list of users it will
-	// authenticate, since every Dir and Store method requires the caller's
-	// key to verify the request signature.
-	if serverConfig.KeyDir != "" {
-		keyDir := serverConfig.KeyDir
-		if !filepath.IsAbs(keyDir) {
-			keyDir = filepath.Join(*cfgPath, keyDir)
-		}
-		cfg = config.SetValue(cfg, trust.ConfigKey, keyDir)
+	cfg, err = setTrust(cfg, serverConfig, *cfgPath)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	storeCfg := config.SetPacking(cfg, upspin.EEIntegrityPack)
