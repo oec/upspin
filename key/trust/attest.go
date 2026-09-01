@@ -47,6 +47,14 @@ import (
 // someone else. Both are prefixed with a label, so that a signature made over
 // a user record cannot be confused with one made over something else.
 //
+// Carrying the record itself, rather than a signature detached from one, is
+// what allows that: a verifier given only signatures would have to rebuild the
+// signed bytes from a record it was handed, which needs a canonical encoding
+// of upspin.User that nothing here defines, and which would cover only the
+// fields that encoding knew about, leaving the rest for whoever handed the
+// record over to choose. The signed bytes are parsed and used as they stand
+// instead, so nothing outside them is used at all.
+//
 // An attested record needs no separate verification by the reader: whoever
 // holds an anchor key for a domain vouches for every user in it. Pinning one
 // key per domain is therefore enough to accept records for all its users.
