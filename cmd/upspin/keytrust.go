@@ -66,14 +66,20 @@ With -remove, keytrust deletes the record for each user named; with
 leaving any others in place.
 
 With -check, keytrust compares each pinned record, or each of those
-named as arguments, against what is published for that user now by the
-delegated key sets and by the user's own domain, and reports any that
-disagree. Nothing in Upspin pushes a key change, so a pinned record can
-outlive the key it names; until it is replaced, files shared with that
-user are wrapped to a key they no longer hold, and neither party is
-told. A check is how that is found on purpose rather than by the loss
-of access it causes. It needs a keysets entry, or keydiscovery, in the
-configuration; with neither there is nothing to compare against.
+named as arguments, against what is published for that user now by
+the delegated key sets and by the user's own domain, and reports any
+that disagree. Every source is asked and each key is listed against
+the source that published it, so that two sets holding different
+records for the same user are reported as a conflict even where the
+pinned record agrees with one of them. A lookup cannot report that:
+it takes the record from the source named first in the configuration
+and says nothing of the rest. Nothing in Upspin pushes a key change,
+so a pinned record can outlive the key it names; until it is
+replaced, files shared with that user are wrapped to a key they no
+longer hold, and neither party is told. A check is how that is found
+on purpose rather than by the loss of access it causes. It needs a
+keysets entry, or keydiscovery, in the configuration; with neither
+there is nothing to compare against.
 
 With -export, keytrust writes the pinned record for each user named to
 standard output, as it is stored and including its attestation, so that
@@ -209,7 +215,7 @@ func (s *State) keytrustCheck(fs *flag.FlagSet, dir string) {
 		}
 	}
 
-	stale := 0
+	stale, conflicting := 0, 0
 	for _, p := range pins {
 		var pinned *upspin.User
 		var err error
@@ -227,20 +233,68 @@ func (s *State) keytrustCheck(fs *flag.FlagSet, dir string) {
 			what += " (anchor for " + p.anchor + ")"
 		}
 		published := checker.Published(p.name)
+		agree, matches := agreement(published, pinned.PublicKey)
 		switch {
-		case published == nil:
+		case len(published) == 0:
 			s.Printf("%s\tnot published\n", what)
-		case published.PublicKey == pinned.PublicKey:
+		case !agree:
+			// The sources do not agree with one another, which is
+			// worth saying whether or not the pin is among them:
+			// only one of them can be the key the user holds.
+			conflicting++
+			s.Printf("%s\tCONFLICT\n", what)
+			s.reportKeys(pinned, published)
+		case matches:
 			s.Printf("%s\tok\n", what)
 		default:
 			stale++
-			s.Printf("%s\tSTALE\n\tpinned:    %s\n\tpublished: %s\n",
-				what, factotum.Fingerprint(pinned.PublicKey), factotum.Fingerprint(published.PublicKey))
+			s.Printf("%s\tSTALE\n", what)
+			s.reportKeys(pinned, published)
 		}
 	}
 	if stale > 0 {
 		s.Failf("%d pinned record(s) are out of date; replace each with "+
 			"'upspin keytrust -remove <user>' then 'upspin keytrust -add <user>'", stale)
+	}
+	if conflicting > 0 {
+		s.Failf("%d user(s) have records that disagree between sources; a lookup uses the "+
+			"one listed first, so establish which is current before relying on it", conflicting)
+	}
+}
+
+// agreement reports whether the sources all publish the same key, and whether
+// that key is the pinned one. With no sources both are true, vacuously; the
+// caller reports that case before asking.
+func agreement(published []trust.Answer, pinned upspin.PublicKey) (agree, matches bool) {
+	agree, matches = true, true
+	for _, a := range published {
+		if a.User.PublicKey != published[0].User.PublicKey {
+			agree = false
+		}
+		if a.User.PublicKey != pinned {
+			matches = false
+		}
+	}
+	return agree, matches
+}
+
+// reportKeys prints the pinned key and the key each source publishes, one to a
+// line and named by its source, so that a disagreement shows who says what.
+func (s *State) reportKeys(pinned *upspin.User, published []trust.Answer) {
+	labels := []string{"pinned"}
+	keys := []upspin.PublicKey{pinned.PublicKey}
+	for _, a := range published {
+		labels = append(labels, a.Source)
+		keys = append(keys, a.User.PublicKey)
+	}
+	width := 0
+	for _, label := range labels {
+		if len(label) > width {
+			width = len(label)
+		}
+	}
+	for i, label := range labels {
+		s.Printf("\t%-*s %s\n", width+1, label+":", factotum.Fingerprint(keys[i]))
 	}
 }
 

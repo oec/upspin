@@ -468,14 +468,20 @@ With -remove, keytrust deletes the record for each user named; with
 leaving any others in place.
 
 With -check, keytrust compares each pinned record, or each of those
-named as arguments, against what is published for that user now by the
-delegated key sets and by the user's own domain, and reports any that
-disagree. Nothing in Upspin pushes a key change, so a pinned record can
-outlive the key it names; until it is replaced, files shared with that
-user are wrapped to a key they no longer hold, and neither party is
-told. A check is how that is found on purpose rather than by the loss
-of access it causes. It needs a keysets entry, or keydiscovery, in the
-configuration; with neither there is nothing to compare against.
+named as arguments, against what is published for that user now by
+the delegated key sets and by the user's own domain, and reports any
+that disagree. Every source is asked and each key is listed against
+the source that published it, so that two sets holding different
+records for the same user are reported as a conflict even where the
+pinned record agrees with one of them. A lookup cannot report that:
+it takes the record from the source named first in the configuration
+and says nothing of the rest. Nothing in Upspin pushes a key change,
+so a pinned record can outlive the key it names; until it is
+replaced, files shared with that user are wrapped to a key they no
+longer hold, and neither party is told. A check is how that is found
+on purpose rather than by the loss of access it causes. It needs a
+keysets entry, or keydiscovery, in the configuration; with neither
+there is nothing to compare against.
 
 With -export, keytrust writes the pinned record for each user named to
 standard output, as it is stored and including its attestation, so that

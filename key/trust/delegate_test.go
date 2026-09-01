@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"upspin.io/config"
+	"upspin.io/errors"
 	"upspin.io/upspin"
 )
 
@@ -155,4 +156,158 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// fakeReader returns a reader for the sets field of the same name, serving the
+// records given, keyed by the set that publishes them, so that precedence
+// between sets can be tested without a directory server. A set named in broken
+// returns an error instead, standing for one that cannot be read at all.
+//
+// It replaces nothing global, so tests that use it stay independent of one
+// another and may be run in parallel.
+//
+// Everything readSet returns has already passed Accept, so a record here is
+// one whose attestation verified against a pinned anchor.
+func fakeReader(records map[upspin.PathName][]*upspin.User, broken ...upspin.PathName) func(upspin.Config, string, upspin.PathName) (map[upspin.UserName]*upspin.User, error) {
+	return func(_ upspin.Config, _ string, set upspin.PathName) (map[upspin.UserName]*upspin.User, error) {
+		for _, b := range broken {
+			if b == set {
+				return nil, errors.E(errors.IO, set, errors.Str("unreadable"))
+			}
+		}
+		users := make(map[upspin.UserName]*upspin.User)
+		for _, u := range records[set] {
+			users[u.Name] = u
+		}
+		return users, nil
+	}
+}
+
+// TestConflictingSets covers two delegated key sets that publish different
+// records for the same user. Both records are attested, or readSet would not
+// have returned them, so both are the user's domain speaking through an anchor
+// the reader pinned; nothing in a record says which of them is the newer. The
+// reader's configuration decides instead: the set named first wins.
+func TestConflictingSets(t *testing.T) {
+	first := upspin.PathName("dana@example.net/Keys")
+	second := upspin.PathName("ravi@example.net/Keys")
+	early := &upspin.User{Name: "carol@example.com", PublicKey: annKey}
+	late := &upspin.User{Name: "carol@example.com", PublicKey: bobKey}
+
+	read := fakeReader(map[upspin.PathName][]*upspin.User{
+		first:  {early},
+		second: {late},
+	})
+
+	s := &sets{paths: []upspin.PathName{first, second}, read: read}
+	got := s.lookup(config.New(), "/keys", early.Name)
+	if got == nil {
+		t.Fatal("lookup found no record")
+	}
+	if got.PublicKey != early.PublicKey {
+		t.Errorf("lookup returned the record from the second set; want the first")
+	}
+
+	// The order in the configuration is the whole of the decision, so
+	// reversing it hands back the other record. Neither lookup reports
+	// that a second set disagreed.
+	s = &sets{paths: []upspin.PathName{second, first}, read: read}
+	got = s.lookup(config.New(), "/keys", early.Name)
+	if got == nil {
+		t.Fatal("lookup found no record")
+	}
+	if got.PublicKey != late.PublicKey {
+		t.Errorf("lookup did not follow the order of the sets")
+	}
+
+	// A user no set publishes is still absent, conflict or no.
+	if got := s.lookup(config.New(), "/keys", "nobody@example.com"); got != nil {
+		t.Errorf("lookup of an unpublished user = %v; want nil", got)
+	}
+}
+
+// TestConflictingSetsWithOneUnreadable covers the same conflict when the set
+// that would have won cannot be read. Precedence holds only among the sets a
+// refresh managed to read: an unreadable set is skipped, so the answer comes
+// from the next one that could be read, and the reader is not told that it is
+// not the answer they would otherwise have had.
+func TestConflictingSetsWithOneUnreadable(t *testing.T) {
+	first := upspin.PathName("dana@example.net/Keys")
+	second := upspin.PathName("ravi@example.net/Keys")
+	early := &upspin.User{Name: "carol@example.com", PublicKey: annKey}
+	late := &upspin.User{Name: "carol@example.com", PublicKey: bobKey}
+
+	s := &sets{
+		paths: []upspin.PathName{first, second},
+		read: fakeReader(map[upspin.PathName][]*upspin.User{
+			first:  {early},
+			second: {late},
+		}, first),
+	}
+	got := s.lookup(config.New(), "/keys", early.Name)
+	if got == nil {
+		t.Fatal("an unreadable set discarded the sets after it")
+	}
+	if got.PublicKey != late.PublicKey {
+		t.Errorf("lookup did not fall through to the readable set")
+	}
+
+	// If no set can be read at all the snapshot in hand is kept, rather
+	// than being emptied by a refresh that reached nothing.
+	known := &upspin.User{Name: "carol@example.com", PublicKey: annKey}
+	s = &sets{
+		paths: []upspin.PathName{first, second},
+		read:  fakeReader(nil, first, second),
+		users: map[upspin.UserName]*upspin.User{known.Name: known},
+	}
+	if got := s.lookup(config.New(), "/keys", known.Name); got != known {
+		t.Errorf("a failed refresh discarded the snapshot")
+	}
+}
+
+// TestCheckerPublished covers what a check sees where a lookup sees one
+// answer: every source is asked, and each record is labelled with the source
+// that published it, so that two sets disagreeing is visible rather than
+// hidden behind whichever the configuration names first.
+func TestCheckerPublished(t *testing.T) {
+	first := upspin.PathName("dana@example.net/Keys")
+	second := upspin.PathName("ravi@example.net/Keys")
+	early := &upspin.User{Name: "carol@example.com", PublicKey: annKey}
+	late := &upspin.User{Name: "carol@example.com", PublicKey: bobKey}
+
+	cfg := config.SetValue(config.New(), ConfigKey, t.TempDir())
+	cfg = config.SetValue(cfg, SetsConfigKey, "- "+string(first)+"\n- "+string(second))
+	c, err := NewChecker(cfg)
+	if err != nil {
+		t.Fatalf("NewChecker: %v", err)
+	}
+	if !c.Sources() {
+		t.Fatal("Sources reported nothing to check against")
+	}
+	c.sets.read = fakeReader(map[upspin.PathName][]*upspin.User{
+		first:  {early},
+		second: {late},
+	})
+
+	got := c.Published(early.Name)
+	if len(got) != 2 {
+		t.Fatalf("Published returned %d answers; want both sets", len(got))
+	}
+	for i, want := range []Answer{
+		{Source: string(first), User: early},
+		{Source: string(second), User: late},
+	} {
+		if got[i].Source != want.Source {
+			t.Errorf("answer %d from %q; want %q", i, got[i].Source, want.Source)
+		}
+		if got[i].User.PublicKey != want.User.PublicKey {
+			t.Errorf("answer %d has the wrong key", i)
+		}
+	}
+
+	// A user no set publishes has no answers at all, which is what the
+	// check reports as "not published" rather than as a disagreement.
+	if got := c.Published("nobody@example.com"); len(got) != 0 {
+		t.Errorf("Published for an unpublished user = %v; want none", got)
+	}
 }

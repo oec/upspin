@@ -66,7 +66,7 @@ func TestKeyDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg = append(cfg, []byte("keysets:\n- "+string(dana)+"/Keys\n")...)
+	cfg = append(cfg, []byte("keysets:\n- "+string(dana)+"/Keys\n- "+string(ravi)+"/Keys\n")...)
 	if err := os.WriteFile(cfgFile, cfg, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +176,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 	attested := filepath.Join(tmp, "newbie.attested")
 	tampered := filepath.Join(tmp, "newbie.tampered")
 	cosigned := filepath.Join(tmp, "newbie.cosigned")
+	staleAttested := filepath.Join(tmp, "newbie.stale.attested")
 
 	// A record with no attestation at all. Publishing it in a delegated
 	// set must not be enough to make anyone believe it.
@@ -332,7 +333,7 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			do("keytrust -check newbie@example.net"),
 			"",
 			expectAndFail("out of date",
-				"newbie@example.net", "STALE", "pinned:", "published:"),
+				"newbie@example.net", "STALE", "pinned:", "dana@example.net/Keys:"),
 		},
 		{
 			// And a lookup refuses rather than handing back a key
@@ -354,6 +355,61 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			),
 			"",
 			expect("removed newbie@example.net", "pinned newbie@example.net", "(attested)", "\tok"),
+		},
+		{
+			// dana attests to the superseded record too. A record
+			// is carried by whoever publishes it and vouched for
+			// by whoever signs it, so this one can now be
+			// published by somebody else entirely.
+			"attest to the superseded record",
+			dana,
+			do("keysign -in=" + stale),
+			"",
+			save(staleAttested, "name: newbie@example.net", "signer: dana@example.net"),
+		},
+		{
+			// ravi publishes a set of his own. Both sets are named
+			// in sam's configuration, dana's first.
+			"publish a second delegated key set",
+			ravi,
+			do("mkdir ravi@example.net", "mkdir @/Keys"),
+			"",
+			expectNoOutput(),
+		},
+		putFile(ravi, "ravi@example.net/Keys/Access", "r,l: all\n*:ravi@example.net\n"),
+		{
+			"put the superseded record in the second set",
+			ravi,
+			do(
+				"cp "+staleAttested+" @/Keys/newbie@example.net",
+				"ls @/Keys",
+			),
+			"",
+			expect("ravi@example.net/Keys/newbie@example.net"),
+		},
+		{
+			// Both records are attested by the anchor pinned for
+			// the domain, so both are the domain speaking, and
+			// nothing in either says which is the newer. The check
+			// names every source and the key it published.
+			"check reports sets that disagree",
+			sam,
+			do("keytrust -check newbie@example.net"),
+			"",
+			expectAndFail("disagree between sources",
+				"newbie@example.net", "CONFLICT",
+				"pinned:", "dana@example.net/Keys:", "ravi@example.net/Keys:"),
+		},
+		{
+			// A lookup cannot report that. The pin agrees with the
+			// set named first, so it answers with the key it holds
+			// and says nothing of the set that disagrees, which is
+			// what the check exists to make visible.
+			"a lookup says nothing of the disagreement",
+			sam,
+			do("user newbie@example.net"),
+			"",
+			expect("name: newbie@example.net", strings.Split(newbieKey, "\n")[1]),
 		},
 		{
 			// ravi appends his signature to dana's, without her

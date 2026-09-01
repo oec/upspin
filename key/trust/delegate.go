@@ -89,11 +89,21 @@ func Sets(cfg upspin.Config) ([]upspin.PathName, error) {
 // and the state of the refresh that produces it.
 type sets struct {
 	paths []upspin.PathName
+	// read reads one set, and is readSet unless a test has replaced it to
+	// supply sets without a directory server. It is set when the sets are
+	// built and not changed after, so it needs no lock and no test has to
+	// reach for a package-level variable to reach it.
+	read func(cfg upspin.Config, keyDir string, set upspin.PathName) (map[upspin.UserName]*upspin.User, error)
 
 	mu sync.Mutex
 	// users is the current snapshot. It is replaced wholesale, never
 	// modified, so a reader may use it after releasing the lock.
 	users map[upspin.UserName]*upspin.User
+	// bySet is what each set was found to publish, from which users is
+	// merged. It is kept so that a check can show two sets disagreeing
+	// about a user rather than only the record a lookup would use. It is
+	// replaced wholesale alongside users.
+	bySet map[upspin.PathName]map[upspin.UserName]*upspin.User
 	// lastTry is when a refresh was last begun, successful or not, so that
 	// a user who is in no set does not provoke one on every lookup.
 	lastTry time.Time
@@ -107,8 +117,28 @@ type sets struct {
 // refreshing the snapshot first if it is absent or stale. It returns a nil
 // user, and no error, if no set publishes an acceptable record for name.
 func (s *sets) lookup(cfg upspin.Config, keyDir string, name upspin.UserName) *upspin.User {
+	users, _ := s.snapshot(cfg, keyDir)
+	return users[name]
+}
+
+// published returns what each set publishes for name, in the order the sets
+// are named in the configuration, omitting those that publish nothing for
+// them. A lookup uses the first of these; a check wants them all.
+func (s *sets) published(cfg upspin.Config, keyDir string, name upspin.UserName) []Answer {
+	_, bySet := s.snapshot(cfg, keyDir)
+	var found []Answer
+	for _, set := range s.paths {
+		if u := bySet[set][name]; u != nil {
+			found = append(found, Answer{Source: string(set), User: u})
+		}
+	}
+	return found
+}
+
+// snapshot returns the merged snapshot and the per-set records behind it,
+// refreshing both first if that is due and no refresh is already running.
+func (s *sets) snapshot(cfg upspin.Config, keyDir string) (map[upspin.UserName]*upspin.User, map[upspin.PathName]map[upspin.UserName]*upspin.User) {
 	s.mu.Lock()
-	users := s.users
 	// A refresh is due if none has ever been tried, or if the last attempt
 	// was long enough ago. A failed attempt counts, so that a user who is
 	// in no set does not provoke one on every lookup.
@@ -122,13 +152,14 @@ func (s *sets) lookup(cfg upspin.Config, keyDir string, name upspin.UserName) *u
 
 		s.mu.Lock()
 		if fresh != nil {
-			s.users = fresh
+			s.bySet = fresh
+			s.users = merge(s.paths, fresh)
 		}
 		s.refreshing = false
-		users = s.users
 	}
+	users, bySet := s.users, s.bySet
 	s.mu.Unlock()
-	return users[name]
+	return users, bySet
 }
 
 // peek returns the record a set publishes for name if the snapshot already
@@ -140,30 +171,47 @@ func (s *sets) peek(name upspin.UserName) *upspin.User {
 	return s.users[name]
 }
 
-// load reads every delegated set and returns the records it accepts from them,
-// or nil if no set could be read at all. Earlier sets win, so that the order
-// in the configuration decides between two sets that publish the same user.
-func (s *sets) load(cfg upspin.Config, keyDir string) map[upspin.UserName]*upspin.User {
+// load reads every delegated set and returns the records it accepts from each,
+// or nil if no set could be read at all.
+func (s *sets) load(cfg upspin.Config, keyDir string) map[upspin.PathName]map[upspin.UserName]*upspin.User {
 	const op errors.Op = "key/trust.load"
-	users := make(map[upspin.UserName]*upspin.User)
-	read := false
+	bySet := make(map[upspin.PathName]map[upspin.UserName]*upspin.User)
+	read := s.read
+	if read == nil {
+		read = readSet
+	}
+	any := false
 	for _, set := range s.paths {
-		found, err := readSet(cfg, keyDir, set)
+		found, err := read(cfg, keyDir, set)
 		if err != nil {
 			// One unreadable set must not discard the others, nor
 			// the snapshot already in hand, so note it and go on.
 			log.Error.Printf("%s: %s: %v", op, set, err)
 			continue
 		}
-		read = true
-		for name, u := range found {
+		any = true
+		bySet[set] = found
+	}
+	if !any {
+		return nil
+	}
+	return bySet
+}
+
+// merge combines what the sets publish into the snapshot a lookup answers
+// from. Earlier sets win, so that the order in the configuration decides
+// between two sets that publish the same user. Both records are attested, or
+// they would not be here, and nothing in a record says which is the newer, so
+// the reader's own order is the only ground on which to choose. Use the -check
+// flag of the keytrust subcommand to see the sets that were passed over.
+func merge(paths []upspin.PathName, bySet map[upspin.PathName]map[upspin.UserName]*upspin.User) map[upspin.UserName]*upspin.User {
+	users := make(map[upspin.UserName]*upspin.User)
+	for _, set := range paths {
+		for name, u := range bySet[set] {
 			if _, ok := users[name]; !ok {
 				users[name] = u
 			}
 		}
-	}
-	if !read {
-		return nil
 	}
 	return users
 }
@@ -264,19 +312,37 @@ func (c *Checker) Sources() bool {
 	return c.sets != nil || c.discovery != nil
 }
 
-// Published returns the record published for name by a delegated key set or by
-// the user's own domain, or nil if none is. The pinned key directory is not
-// consulted: the point of a check is to see what the other sources say.
-func (c *Checker) Published(name upspin.UserName) *upspin.User {
+// An Answer is what one source publishes for a user. Source names the place it
+// came from as the configuration does: the path of a delegated key set, or
+// DiscoverySource for a record the user's own domain published.
+type Answer struct {
+	Source string
+	User   *upspin.User
+}
+
+// DiscoverySource is the Source of an Answer found by asking the user's own
+// domain, which the configuration names by a flag rather than by a path.
+const DiscoverySource = "discovery"
+
+// Published returns what each configured source publishes for name, in the
+// order a lookup consults them, omitting those that publish nothing for them.
+// The pinned key directory is not consulted: the point of a check is to see
+// what the other sources say.
+//
+// Every source is asked, where a lookup stops at the first that answers. Two
+// sources disagreeing about a user is worth reporting in its own right: it
+// says that a rotation is half-propagated, or that one of the anchors is
+// attesting to something the others do not, and a lookup would hide it behind
+// whichever source the configuration happens to name first.
+func (c *Checker) Published(name upspin.UserName) []Answer {
+	var found []Answer
 	if c.sets != nil {
-		if u := c.sets.lookup(c.cfg, c.dir, name); u != nil {
-			return u
-		}
+		found = append(found, c.sets.published(c.cfg, c.dir, name)...)
 	}
 	if c.discovery != nil {
 		if u := c.discovery.lookup(c.cfg, c.dir, name); u != nil {
-			return u
+			found = append(found, Answer{Source: DiscoverySource, User: u})
 		}
 	}
-	return nil
+	return found
 }
