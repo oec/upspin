@@ -182,6 +182,14 @@ func (s *sets) load(cfg upspin.Config, keyDir string) map[upspin.PathName]map[up
 	}
 	any := false
 	for _, set := range s.paths {
+		// Reading a set is a full Upspin read, made on the goroutine
+		// of whatever lookup found the snapshot stale, against a
+		// directory server that may be slow, unreachable, or, for a
+		// server whose own users publish the set, itself. Say what is
+		// being read before reading it: without this a request that
+		// stalls here leaves a log that simply stops, with nothing to
+		// say the set was the last thing touched.
+		log.Debug.Printf("%s: reading %s", op, set)
 		found, err := read(cfg, keyDir, set)
 		if err != nil {
 			// One unreadable set must not discard the others, nor
@@ -189,6 +197,7 @@ func (s *sets) load(cfg upspin.Config, keyDir string) map[upspin.PathName]map[up
 			log.Error.Printf("%s: %s: %v", op, set, err)
 			continue
 		}
+		log.Debug.Printf("%s: %s: %d records", op, set, len(found))
 		any = true
 		bySet[set] = found
 	}
