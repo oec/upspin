@@ -245,6 +245,7 @@ func readSet(cfg upspin.Config, keyDir string, set upspin.PathName) (map[upspin.
 	if err != nil {
 		return nil, errors.E(op, set, err)
 	}
+	log.Debug.Printf("%s: %s: %d entries", op, set, len(entries))
 	users := make(map[upspin.UserName]*upspin.User)
 	for _, entry := range entries {
 		if entry.IsDir() || entry.IsLink() {
@@ -254,6 +255,14 @@ func readSet(cfg upspin.Config, keyDir string, set upspin.PathName) (map[upspin.
 		// else in the directory, such as an Access file, is not one.
 		name, err := user.Clean(upspin.UserName(path.Base(string(entry.Name))))
 		if err != nil {
+			// Silent at Info: an Access file is expected here, and
+			// so is anything else the owner keeps beside the
+			// records. But a record whose file name carries a
+			// suffix, or is otherwise not the user name it
+			// describes, is skipped by this same test, and looks
+			// from the outside exactly like a set that does not
+			// hold the user at all.
+			log.Debug.Printf("%s: %s: not named for a user; not a record", op, entry.Name)
 			continue
 		}
 		if entry.IsIncomplete() {
