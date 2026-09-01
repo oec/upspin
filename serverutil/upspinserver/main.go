@@ -9,6 +9,7 @@
 package upspinserver // import "upspin.io/serverutil/upspinserver"
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -108,6 +109,17 @@ const (
 func setTrust(cfg upspin.Config, serverConfig *subcmd.ServerConfig, dir string) (upspin.Config, error) {
 	if serverConfig.KeyDir != "" {
 		keyDir := serverConfig.KeyDir
+		// A leading tilde is the home directory of the user the server
+		// runs as, as it is in a client configuration file. Without
+		// this it would be a directory named "~" under dir, which is
+		// nobody's intention.
+		if keyDir == "~" || strings.HasPrefix(keyDir, "~"+string(filepath.Separator)) {
+			home, err := config.Homedir()
+			if err != nil {
+				return nil, err
+			}
+			keyDir = filepath.Join(home, keyDir[1:])
+		}
 		if !filepath.IsAbs(keyDir) {
 			keyDir = filepath.Join(dir, keyDir)
 		}
@@ -394,6 +406,17 @@ func readServerConfig() (*subcmd.ServerConfig, error) {
 	cfg := &subcmd.ServerConfig{}
 	if err := json.Unmarshal(b, cfg); err != nil {
 		return nil, err
+	}
+	// A misspelled field decodes to nothing at all and is not an error,
+	// so a server can be configured with a KeyDir it will never read.
+	// Say so rather than leave it to be inferred from the behaviour.
+	// This is a warning and not a failure: an unknown field is how a
+	// configuration written for a different build of the server arrives,
+	// and refusing to start on one would be worse than ignoring it.
+	strict := json.NewDecoder(bytes.NewReader(b))
+	strict.DisallowUnknownFields()
+	if err := strict.Decode(&subcmd.ServerConfig{}); err != nil {
+		log.Error.Printf("%s: %v (the setting it names has no effect)", cfgFile, err)
 	}
 
 	return cfg, nil

@@ -7,6 +7,7 @@ package upspinserver
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"upspin.io/config"
@@ -146,5 +147,25 @@ func TestCredentialsHiding(t *testing.T) {
 		if c.output != output {
 			t.Errorf("case %d: got %v, want %v", i, output, c.output)
 		}
+	}
+}
+
+// TestSetTrustTilde checks that a leading tilde in KeyDir means the home
+// directory of the user the server runs as, as it does in a client
+// configuration file, rather than a directory named "~" under the server
+// configuration directory. The directory does not exist, so setTrust fails;
+// what the test is after is the path named in the complaint.
+func TestSetTrustTilde(t *testing.T) {
+	home, err := config.Homedir()
+	if err != nil {
+		t.Skipf("no home directory: %v", err)
+	}
+	_, err = setTrust(config.New(), &subcmd.ServerConfig{KeyDir: "~/upspin-keys-that-are-not-there"}, t.TempDir())
+	if err == nil {
+		t.Fatal("setTrust succeeded; want an error naming the missing directory")
+	}
+	want := filepath.Join(home, "upspin-keys-that-are-not-there")
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("setTrust error = %v; want it to name %s", err, want)
 	}
 }
