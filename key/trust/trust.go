@@ -60,12 +60,14 @@
 //     the set named first in the configuration answers; "upspin keytrust
 //     -check" reports the disagreement, which a lookup cannot.
 //
-//  3. The wrapped key server. If its answer carries an attestation, the
-//     attestation is checked against the pinned anchors and the signed record
-//     used in place of what the server sent, so a key server that attests to
-//     what it serves is no longer a trusted party. An answer with no
-//     attestation, or one for a domain with no anchor pinned, is believed as
-//     it always was.
+//  3. The wrapped key server. Its answer may carry an attestation, which is a
+//     signed copy of the record rather than a signature over the one the
+//     server sent. If that copy verifies against the pinned anchors it is
+//     used and the server's own fields are discarded, not compared, so that
+//     nothing outside the signed bytes is used at all and a key server that
+//     attests to what it serves is no longer a trusted party. An answer with
+//     no attestation, or one for a domain with no anchor pinned, is believed
+//     as it always was.
 //
 //  4. Discovery, "keydiscovery": the records a domain publishes for itself
 //     over DNS and HTTPS. Used only through Accept, so neither DNS nor the

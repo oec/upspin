@@ -213,8 +213,9 @@ answered by the first that holds a record:
 1. the records pinned in `keydir`, read from disk, touching no network;
 2. the delegated key sets named by `keysets`, whose records are used only if
    attested;
-3. the key server, whose answer is replaced by the attested record when it
-   carries one;
+3. the key server; if its answer carries an attestation, which is a signed
+   copy of the record, that copy is used and the fields the server sent are
+   discarded, so only signed bytes are believed;
 4. the records the user's own domain publishes, if `keydiscovery` is set,
    again only if attested.
 
