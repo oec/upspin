@@ -156,8 +156,13 @@ func PublicKeys(upk []upspin.PublicKey) []string {
 	return s
 }
 
-// UpspinUser converts a proto.User to upspin.User.
+// UpspinUser converts a proto.User to upspin.User. A nil user converts to
+// nil, as the other converters here do: the bytes come off the wire, so
+// whether the field was set is not this function's judgement to make.
 func UpspinUser(user *User) *upspin.User {
+	if user == nil {
+		return nil
+	}
 	return &upspin.User{
 		Name:        upspin.UserName(user.Name),
 		Dirs:        UpspinEndpoints(user.Dirs),
@@ -167,8 +172,12 @@ func UpspinUser(user *User) *upspin.User {
 	}
 }
 
-// UserProto converts an upspin.User to a proto.User.
+// UserProto converts an upspin.User to a proto.User. Nil converts to nil, as
+// in UpspinUser.
 func UserProto(user *upspin.User) *User {
+	if user == nil {
+		return nil
+	}
 	return &User{
 		Name:        string(user.Name),
 		Dirs:        Endpoints(user.Dirs),

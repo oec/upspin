@@ -153,6 +153,15 @@ func (s *server) Put(session rpc.Session, reqBytes []byte) (pb.Message, error) {
 	s.incPutCounters()
 
 	user := proto.UpspinUser(req.User)
+	if user == nil {
+		// A request with no user record at all. The conversion used to
+		// dereference it, so anyone who could reach this endpoint
+		// could stop the server with an empty message.
+		err := errors.E(errors.Op("rpc/keyserver"), errors.Invalid,
+			errors.Str("no user record in request"))
+		op.log(err)
+		return putError(err), nil
+	}
 	err = key.Put(user)
 	if err != nil {
 		op.log(err)

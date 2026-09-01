@@ -48,6 +48,14 @@ func (r *remote) Lookup(name upspin.UserName) (*upspin.User, error) {
 	if len(resp.Error) != 0 {
 		return nil, op.error(errors.UnmarshalError(resp.Error))
 	}
+	if resp.User == nil {
+		// Neither a user nor an error. Nothing that speaks this
+		// protocol answers so; an empty or unrelated HTTP body decodes
+		// to exactly this. Say so rather than hand a nil record on to
+		// a caller that has every reason to expect one.
+		return nil, op.error(errors.E(errors.Invalid, name,
+			errors.Str("key server returned neither a user record nor an error")))
+	}
 	return proto.UpspinUser(resp.User), nil
 }
 

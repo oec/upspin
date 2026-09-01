@@ -193,6 +193,16 @@ func (c *httpClient) InvokeUnauthenticated(method string, req, resp pb.Message) 
 	if err != nil {
 		return errors.E(op, errors.IO, err)
 	}
+	if httpResp.StatusCode != http.StatusOK {
+		// Not a reply from this protocol at all: an error page, a
+		// redirect, or whatever else is listening at that address.
+		// Decoding it as a protobuf yields a message that is empty
+		// rather than wrong, which the caller cannot tell from a real
+		// answer. Invoke has always checked; this did not.
+		msg, _ := io.ReadAll(io.LimitReader(httpResp.Body, 1024))
+		httpResp.Body.Close()
+		return errors.E(op, errors.IO, errors.Errorf("%s: %s", httpResp.Status, msg))
+	}
 
 	return readResponse(op, httpResp.Body, resp)
 }

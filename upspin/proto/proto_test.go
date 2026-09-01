@@ -82,3 +82,12 @@ func TestUserAttestationIsInDescriptor(t *testing.T) {
 		t.Errorf("attestation field kind = %s; want %s", got, want)
 	}
 }
+
+// TestUpspinUserNil checks that a message with no user field converts to nil
+// rather than dereferencing it. The value comes off the wire, so whether the
+// field was set is not this function's judgement to make.
+func TestUpspinUserNil(t *testing.T) {
+	if u := UpspinUser(nil); u != nil {
+		t.Errorf("UpspinUser(nil) = %v; want nil", u)
+	}
+}
