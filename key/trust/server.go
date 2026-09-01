@@ -55,10 +55,16 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 
 // Lookup implements upspin.KeyServer. It consults four sources in turn and
 // returns the first answer: the pinned key directory, if the configuration
-// names one; the delegated key sets, if it names any; the records a domain
-// publishes for itself, if the configuration asks for discovery; and last the
-// wrapped key server. The order is the order of authority, so that nothing
-// found further down, nor a cache in front of it, can shadow a pinned record.
+// names one; the delegated key sets, if it names any; the wrapped key server;
+// and last the records a domain publishes for itself, if the configuration
+// asks for discovery. Nothing found further down, nor a cache in front of it,
+// can shadow a pinned record.
+//
+// The key server comes before discovery because it is named in the
+// configuration, deliberately and for a reason its owner had, where discovery
+// is a standing willingness to ask any domain about its own users. Discovery
+// then answers for the users the key server does not know, which includes
+// every user when the configuration names no key server at all.
 //
 // An answer from the wrapped key server that carries an attestation is checked
 // against the pinned trust anchors, and the attested record used in its place.
@@ -89,22 +95,42 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 			return u, nil
 		}
 	}
-	if s.discovery != nil {
-		if u := s.discovery.lookup(s.dd.config, s.dd.dir, name); u != nil {
+	if err := s.dial(); err != nil {
+		// The configuration may name no key server that can be
+		// reached at all, which is not fatal while discovery may
+		// still answer.
+		if u := s.discover(name); u != nil {
 			return u, nil
 		}
-	}
-	if err := s.dial(); err != nil {
 		return nil, errors.E(op, err)
 	}
 	u, err := s.dd.dialed.Lookup(name)
 	if err != nil {
+		if u := s.discover(name); u != nil {
+			return u, nil
+		}
+		// The key server's error is the one to report: it is the
+		// source the configuration named, and discovery answers
+		// silently or not at all by design.
 		return nil, errors.E(op, err)
 	}
 	if err := s.checkAttestation(u); err != nil {
+		// The server offered a signature that does not hold. That is
+		// hostile rather than an absence, so do not go on to ask
+		// somewhere else; say so.
 		return nil, errors.E(op, err)
 	}
 	return u, nil
+}
+
+// discover returns what the user's own domain publishes for name, or nil if
+// the configuration does not ask for discovery or the domain publishes nothing
+// that can be accepted.
+func (s *server) discover(name upspin.UserName) *upspin.User {
+	if s.discovery == nil {
+		return nil
+	}
+	return s.discovery.lookup(s.dd.config, s.dd.dir, name)
 }
 
 // checkAttestation inspects the attestation on a record from the wrapped key

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"upspin.io/config"
 	"upspin.io/errors"
@@ -163,6 +164,68 @@ func TestPutAddressesKeyServer(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ann@example.com")); err == nil {
 		t.Error("Put wrote to the key directory")
+	}
+}
+
+// TestKeyServerOutranksDiscovery covers the order between the two sources that
+// are not pinned. A key server is named in the configuration, deliberately,
+// where discovery is a standing willingness to ask any domain about its own
+// users, so the key server answers first and discovery answers for the users
+// it does not know.
+func TestKeyServerOutranksDiscovery(t *testing.T) {
+	dir := t.TempDir()
+
+	// The key server holds a record for bob, and his domain publishes a
+	// different key for him.
+	fromServer := annUser()
+	fromServer.Name = "bob@example.com"
+	fromServer.PublicKey = annKey
+	fromDomain := annUser()
+	fromDomain.Name = "bob@example.com"
+	fromDomain.PublicKey = bobKey
+
+	// Carol the key server does not know at all. A key server that knows
+	// nobody is the shape of a configuration that names none.
+	onlyPublished := annUser()
+	onlyPublished.Name = "carol@example.com"
+	onlyPublished.PublicKey = bobKey
+
+	svc, dialed := dial(t, dir, map[upspin.UserName]*upspin.User{fromServer.Name: fromServer})
+	s := svc.(*server)
+	s.discovery = &discovery{domains: map[string]*published{
+		"example.com": {
+			users: map[upspin.UserName]*upspin.User{
+				fromDomain.Name:    fromDomain,
+				onlyPublished.Name: onlyPublished,
+			},
+			// Fresh, so that consulting it fetches nothing.
+			lastTry: time.Now(),
+		},
+	}}
+
+	got, err := s.Lookup(fromServer.Name)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got.PublicKey != annKey {
+		t.Errorf("Lookup = %q; want the key server's record", got.PublicKey)
+	}
+	if !*dialed {
+		t.Error("the key server was not consulted for an unpinned user")
+	}
+
+	got, err = s.Lookup(onlyPublished.Name)
+	if err != nil {
+		t.Fatalf("Lookup of a user the key server does not know: %v", err)
+	}
+	if got.PublicKey != bobKey {
+		t.Errorf("Lookup = %q; want the record the domain publishes", got.PublicKey)
+	}
+
+	// A user neither knows is still absent, and the error is the key
+	// server's, since that is the source the configuration named.
+	if _, err := s.Lookup("nobody@example.com"); !errors.Is(errors.NotExist, err) {
+		t.Errorf("Lookup of an unknown user = %v; want NotExist", err)
 	}
 }
 

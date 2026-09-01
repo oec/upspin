@@ -207,6 +207,39 @@ found by DNS SRV record.
 None of those channels is trusted; the attestation is what is believed, and it
 is checked against an anchor the reader pinned.
 
+A lookup therefore has up to four sources, consulted in this order and
+answered by the first that holds a record:
+
+1. the records pinned in `keydir`, read from disk, touching no network;
+2. the delegated key sets named by `keysets`, whose records are used only if
+   attested;
+3. the key server, whose answer is replaced by the attested record when it
+   carries one;
+4. the records the user's own domain publishes, if `keydiscovery` is set,
+   again only if attested.
+
+Nothing below can shadow what is above it, and the key server's cache sits
+inside this arrangement rather than in front of it, so a cached answer cannot
+shadow a pin either.
+The key server precedes discovery because it is named in the configuration,
+deliberately, where discovery is a standing willingness to ask any domain
+about its own users; discovery then answers for the users the key server does
+not know, which is every user when no key server is named.
+The cost of that order is that an unattested answer from the key server is
+preferred to an attested one from the user's own domain, and what removes it
+is pinning, which outranks both.
+The key sets and discovery both rest on the anchors in `keydir`, so a
+configuration that names none resolves every user through the key server,
+exactly as before any of this existed.
+A pinned record that is damaged or holds the wrong user's name fails the
+lookup rather than falling through to the sources below, since falling through
+is how a tampered file would be replaced by whatever a key server chose to
+return.
+Where two key sets publish different records for the same user, both attested,
+the set named first in the configuration answers and `upspin keytrust -check`
+reports the disagreement.
+`go doc upspin.io/key/trust` describes the order and its consequences in full.
+
 Nothing pushes a key change, so a pinned record can outlive the key it names.
 Until it is replaced, files shared with that user are wrapped to a key they no
 longer hold, and neither party is told.

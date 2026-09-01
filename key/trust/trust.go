@@ -38,6 +38,69 @@
 // records for every user in it. Attestations are checked at the boundary, by
 // Accept, when a record arrives from somewhere the reader does not control;
 // what is already in the key directory is trusted because it is there.
+//
+// # The order of a lookup
+//
+// A lookup consults up to four sources and returns the first answer it finds.
+// The order is the order of authority, so that nothing below can shadow what
+// is above it:
+//
+//  1. The pinned key directory, "keydir". It is read from disk on every
+//     lookup, so nothing else is consulted for a user who is pinned, and no
+//     network is touched. A record that is present but unusable, whether
+//     damaged or holding some other user's name, fails the lookup rather than
+//     falling through: falling through would let a tampered file be replaced
+//     silently by whatever a key server chose to return.
+//
+//  2. The delegated key sets, "keysets": directories of records published in
+//     someone's Upspin name space. A record from one is used only if Accept
+//     passes it, so the owner of a set carries records without vouching for
+//     them. The sets are read as a snapshot and refreshed on a timer, not on
+//     each lookup. Where two of them publish different records for one user,
+//     the set named first in the configuration answers; "upspin keytrust
+//     -check" reports the disagreement, which a lookup cannot.
+//
+//  3. The wrapped key server. If its answer carries an attestation, the
+//     attestation is checked against the pinned anchors and the signed record
+//     used in place of what the server sent, so a key server that attests to
+//     what it serves is no longer a trusted party. An answer with no
+//     attestation, or one for a domain with no anchor pinned, is believed as
+//     it always was.
+//
+//  4. Discovery, "keydiscovery": the records a domain publishes for itself
+//     over DNS and HTTPS. Used only through Accept, so neither DNS nor the
+//     server that answers it is trusted to say what a key is, only which
+//     server to ask. Discovery answers for the users the key server does not
+//     know, which is every user when the configuration names no key server.
+//
+// The key server precedes discovery because it is named in the configuration,
+// deliberately and for a reason its owner had, where discovery is a standing
+// willingness to ask any domain about its own users. The cost of that order is
+// that an unattested answer from the key server is preferred to an attested
+// one from the user's own domain. What removes that cost is pinning: a pinned
+// record outranks both, and a key server that serves attested records has its
+// answer checked against the same anchors, so a domain that wants to be
+// believed on its own terms should put its records where they will be checked
+// rather than rely on being asked last.
+//
+// A key server that fails to answer is not an error while discovery may still
+// answer, but one that offers an attestation that does not verify is: that is
+// hostile rather than absent, and the lookup fails there rather than looking
+// elsewhere.
+//
+// The key sets and discovery both rest on the anchors in the key directory, so
+// a configuration that names no keydir resolves every user through the key
+// server: there is nothing for a published record to be checked against, and
+// neither source is consulted.
+//
+// Two properties follow from the order rather than from any one source. This
+// package must be registered as the outermost KeyServer wrapper, enclosing
+// key/usercache rather than enclosed by it, or a cached answer from a key
+// server could shadow a pinned record. And a pinned record contradicted by an
+// attested record already in memory, from a set or from discovery, fails the
+// lookup instead of answering: nothing in Upspin pushes a key change, so a pin
+// can outlive the key it names, and the alternative is to wrap files to a key
+// their reader no longer holds and tell nobody.
 package trust // import "upspin.io/key/trust"
 
 import (

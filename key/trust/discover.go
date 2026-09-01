@@ -166,8 +166,9 @@ type published struct {
 
 // lookup returns the record a domain publishes for name, or nil if it
 // publishes none that can be accepted. It never returns an error: discovery is
-// a last resort before the wrapped key server, and a domain that publishes
-// nothing, or nothing believable, is simply a domain with no answer.
+// the last source consulted, asked only for the users no other source knows,
+// and a domain that publishes nothing, or nothing believable, is simply a
+// domain with no answer.
 func (d *discovery) lookup(cfg upspin.Config, keyDir string, name upspin.UserName) *upspin.User {
 	domain, err := domainOf(name)
 	if err != nil {

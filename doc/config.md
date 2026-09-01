@@ -255,6 +255,22 @@ https://keys.example.com/.well-known/upspin/keys
 	of their choosing, can therefore decide which server is asked but not
 	what the answer is.
 
+	These four settings name the four sources of a user record. A lookup
+	consults them in the order `keydir`, `keysets`, `keyserver`,
+	`keydiscovery`, and answers with the first that holds a record, so
+	nothing later can shadow a record found earlier.
+	A key server named in the configuration therefore answers before a
+	domain asked about its own users, and discovery answers for the users
+	the key server does not know — every user, where no key server is
+	named.
+	`keysets` and `keydiscovery` both rest on the trust anchors in
+	`keydir`; a configuration that names no `keydir` therefore resolves
+	every user through the key server. For the order in full, run
+
+```
+go doc upspin.io/key/trust
+```
+
 * The **`tlscerts`** setting identifies a directory in which to locate TLS
 certificate root authorities.
 If not set, the system uses the local operating system's default set of root

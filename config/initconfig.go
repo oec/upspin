@@ -138,9 +138,10 @@ func FromFile(name string) (upspin.Config, error) {
 // See upspin.io/key/trust.
 //
 // The keydiscovery key, if true, allows a user's record to be fetched from
-// the domain of their name, found by DNS SRV record or at a well-known path.
-// Such a record is used only if it is attested by a trust anchor pinned in the
-// keydir. The default is false. See upspin.io/key/trust.
+// the domain of their name, found by DNS SRV record or at a well-known path,
+// for the users the key server does not know. Such a record is used only if it
+// is attested by a trust anchor pinned in the keydir. The default is false.
+// See upspin.io/key/trust.
 //
 // The tlscerts key specifies a directory containing PEM certificates define
 // the certificate pool used for verifying client TLS connections,
