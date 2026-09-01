@@ -96,8 +96,7 @@
 // neither source is consulted.
 //
 // A configuration that names no key server, its key endpoint unassigned,
-// answers for its own user from itself, after the pins and the sets and before
-// a wrapped server that could only fail. The record holds nothing that is not
+// answers for its own user from itself, after the pins and before the sets. The record holds nothing that is not
 // in the configuration already: the user name, the two endpoints, and the
 // public half of the factotum's key pair. Every operation on a user's own tree
 // begins by resolving her own name, so without this she would have to pin
@@ -105,6 +104,12 @@
 // configuration that does name a key server asks it as before, which is what
 // lets "upspin user" report a configuration that disagrees with the record the
 // server holds.
+//
+// It precedes the sets because reading a set is an Upspin read, which
+// authenticates, which needs this same key. A server whose own user is not
+// pinned would go to the network to learn a key it is holding, and where the
+// set lives in a tree that server serves, it would call itself to do it, while
+// still holding what the inner call needs.
 //
 // Two properties follow from the order rather than from any one source. This
 // package must be registered as the outermost KeyServer wrapper, enclosing

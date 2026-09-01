@@ -492,3 +492,30 @@ func TestNamedKeyServerIsAskedForOwnUser(t *testing.T) {
 		t.Error("the wrapped key server was not dialed for the config's own user")
 	}
 }
+
+// TestOwnUserDoesNotReadTheSets fixes the order of the config's own answer and
+// the delegated sets. Reading a set is an Upspin read, which authenticates,
+// which needs the reader's own key: a server that consulted its sets to learn
+// the key it is holding would go to the network for it, and, where the set is
+// in a tree that same server serves, would call itself from inside a request
+// that already held what the inner call needs. That deadlocked a server, and
+// left it answering from an empty snapshot forever after.
+func TestOwnUserDoesNotReadTheSets(t *testing.T) {
+	ks, _ := dialAs(t, selfConfig(t, t.TempDir()), upspin.Endpoint{Transport: upspin.Unassigned}, nil)
+	srv := ks.(*server)
+	srv.sets = &sets{
+		paths: []upspin.PathName{"someone@example.com/Keys"},
+		read: func(upspin.Config, string, upspin.PathName) (map[upspin.UserName]*upspin.User, error) {
+			t.Error("the delegated sets were consulted for the configuration's own user")
+			return nil, nil
+		},
+	}
+
+	got, err := ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got.PublicKey != annKey {
+		t.Errorf("Lookup = %q; want the key from the configuration", got.PublicKey)
+	}
+}

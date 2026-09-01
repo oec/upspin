@@ -52,6 +52,11 @@ const SetsConfigKey = "keysets"
 // how often a lookup for a user who is in no set will try again.
 var refreshInterval = 2 * time.Minute
 
+// loadTimeout is how long a lookup waits for a set to be read before answering
+// from what it already has. It is not a deadline on the read, which goes on
+// without it; it bounds only the wait.
+var loadTimeout = 30 * time.Second
+
 // Sets returns the delegated key sets named by the configuration, in the order
 // given, or nil if it names none.
 func Sets(cfg upspin.Config) ([]upspin.PathName, error) {
@@ -94,6 +99,11 @@ type sets struct {
 	// built and not changed after, so it needs no lock and no test has to
 	// reach for a package-level variable to reach it.
 	read func(cfg upspin.Config, keyDir string, set upspin.PathName) (map[upspin.UserName]*upspin.User, error)
+
+	// wait is how long a lookup waits for a read, and is loadTimeout
+	// unless a test has shortened it. Like read, it is set when the sets
+	// are built and not changed after.
+	wait time.Duration
 
 	mu sync.Mutex
 	// users is the current snapshot. It is replaced wholesale, never
@@ -148,14 +158,41 @@ func (s *sets) snapshot(cfg upspin.Config, keyDir string) (map[upspin.UserName]*
 		s.lastTry = time.Now()
 		s.mu.Unlock()
 
-		fresh := s.load(cfg, keyDir)
+		// The read runs on its own goroutine so that the lookup can
+		// stop waiting for it. Nothing in the path that reads a set --
+		// a dial, a Glob, the fetch of each record -- has a timeout, so
+		// a set that never answers would otherwise hold this lookup for
+		// good, and, because refreshing stays true until the read
+		// returns, would leave every later lookup answering from an
+		// empty snapshot with no further attempt and nothing in the
+		// log. The goroutine keeps the flag and installs the result if
+		// it ever finishes, so a set that is merely slow still lands.
+		done := make(chan struct{})
+		go func() {
+			fresh := s.load(cfg, keyDir)
+
+			s.mu.Lock()
+			if fresh != nil {
+				s.bySet = fresh
+				s.users = merge(s.paths, fresh)
+			}
+			s.refreshing = false
+			s.mu.Unlock()
+			close(done)
+		}()
+		wait := s.wait
+		if wait == 0 {
+			wait = loadTimeout
+		}
+		select {
+		case <-done:
+		case <-time.After(wait):
+			log.Error.Printf("key/trust: reading the key sets has not finished after %v; "+
+				"answering from the records in hand. The sets will not be consulted again "+
+				"until it does", wait)
+		}
 
 		s.mu.Lock()
-		if fresh != nil {
-			s.bySet = fresh
-			s.users = merge(s.paths, fresh)
-		}
-		s.refreshing = false
 	}
 	users, bySet := s.users, s.bySet
 	s.mu.Unlock()

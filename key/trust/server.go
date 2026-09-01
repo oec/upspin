@@ -61,7 +61,7 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 // can shadow a pinned record.
 //
 // A configuration that names no key server answers for its own user from
-// itself, before reaching a wrapped server that can only fail. See self.
+// itself, after the pinned directory and before the sets. See self.
 //
 // The key server comes before discovery because it is named in the
 // configuration, deliberately and for a reason its owner had, where discovery
@@ -93,13 +93,13 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 			return nil, errors.E(op, err)
 		}
 	}
+	if u := s.self(name); u != nil {
+		return u, nil
+	}
 	if s.sets != nil {
 		if u := s.sets.lookup(s.dd.config, s.dd.dir, name); u != nil {
 			return u, nil
 		}
-	}
-	if u := s.self(name); u != nil {
-		return u, nil
 	}
 	if err := s.dial(); err != nil {
 		// The configuration may name no key server that can be
@@ -141,9 +141,15 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 // server and its caller and so is absent from a configuration that has no key
 // server: this is that same answer, given where it is still needed.
 //
-// It comes after the pinned directory and the delegated sets, which are
-// deliberate acts, and before the wrapped server, which here can only fail. It
-// is confined to the unassigned transport so that a configuration that does
+// It comes after the pinned directory, which is a deliberate act, and before
+// the delegated sets. Before the sets and not after because reading a set is
+// an Upspin read, which authenticates, which needs this same key: a server
+// whose own user is not pinned would go to the network to learn a key it is
+// holding, and where the set lives in a tree that server serves, it would call
+// itself to do it. That is not merely wasteful. The inner request runs while
+// the outer one holds the tree it was loading, and the two wait on each other.
+//
+// It is confined to the unassigned transport so that a configuration that does
 // name a key server still asks it, which is what lets "upspin user" report a
 // configuration that disagrees with the record the server holds.
 func (s *server) self(name upspin.UserName) *upspin.User {
