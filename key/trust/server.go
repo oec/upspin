@@ -60,6 +60,9 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 // asks for discovery. Nothing found further down, nor a cache in front of it,
 // can shadow a pinned record.
 //
+// A configuration that names no key server answers for its own user from
+// itself, before reaching a wrapped server that can only fail. See self.
+//
 // The key server comes before discovery because it is named in the
 // configuration, deliberately and for a reason its owner had, where discovery
 // is a standing willingness to ask any domain about its own users. Discovery
@@ -95,6 +98,9 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 			return u, nil
 		}
 	}
+	if u := s.self(name); u != nil {
+		return u, nil
+	}
 	if err := s.dial(); err != nil {
 		// The configuration may name no key server that can be
 		// reached at all, which is not fatal while discovery may
@@ -121,6 +127,44 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 		return nil, errors.E(op, err)
 	}
 	return u, nil
+}
+
+// self returns the record the configuration describes for its own user, or
+// nil if name is some other user or the configuration cannot describe it.
+//
+// It answers only when the configuration names no key server. Everything the
+// record holds is in the configuration already: the user name, the two
+// endpoints, and the public half of the factotum's key pair. A configuration
+// that pins the users it talks to should not also have to pin itself in order
+// to name itself, which it must do to reach its own tree at all.
+// key/usercache does the same for its own user, but sits between a key
+// server and its caller and so is absent from a configuration that has no key
+// server: this is that same answer, given where it is still needed.
+//
+// It comes after the pinned directory and the delegated sets, which are
+// deliberate acts, and before the wrapped server, which here can only fail. It
+// is confined to the unassigned transport so that a configuration that does
+// name a key server still asks it, which is what lets "upspin user" report a
+// configuration that disagrees with the record the server holds.
+func (s *server) self(name upspin.UserName) *upspin.User {
+	if s.dd.endpoint.Transport != upspin.Unassigned {
+		return nil
+	}
+	cfg := s.dd.config
+	if cfg == nil || name != cfg.UserName() {
+		return nil
+	}
+	f := cfg.Factotum()
+	if f == nil {
+		// No key to report; a config with secrets=none.
+		return nil
+	}
+	return &upspin.User{
+		Name:      name,
+		Dirs:      []upspin.Endpoint{cfg.DirEndpoint()},
+		Stores:    []upspin.Endpoint{cfg.StoreEndpoint()},
+		PublicKey: f.PublicKey(),
+	}
 }
 
 // discover returns what the user's own domain publishes for name, or nil if

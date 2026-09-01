@@ -232,6 +232,14 @@ is pinning, which outranks both.
 The key sets and discovery both rest on the anchors in `keydir`, so a
 configuration that names none resolves every user through the key server,
 exactly as before any of this existed.
+A configuration that names no key server answers for its own user from itself,
+before the sources above can fail: the name, the two endpoints and the public
+half of its own key pair are all in the configuration already, and every
+operation on a user's own tree begins by resolving her own name, so she would
+otherwise have to pin herself in order to name herself.
+A pinned record for her still wins, and where a key server is named it is
+asked as before, so `upspin user` can still report a configuration that
+disagrees with the record the server holds.
 A pinned record that is damaged or holds the wrong user's name fails the
 lookup rather than falling through to the sources below, since falling through
 is how a tampered file would be replaced by whatever a key server chose to

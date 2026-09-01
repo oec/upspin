@@ -392,3 +392,103 @@ func TestKeyServerAttestation(t *testing.T) {
 		}
 	})
 }
+
+// selfConfig returns a configuration for ann@example.com holding her key and
+// the two endpoints her record should report, with keydir set to dir.
+func selfConfig(t *testing.T, dir string) upspin.Config {
+	t.Helper()
+	f, _ := anchorFactotum(t) // Holds annKey.
+	cfg := config.SetUserName(config.New(), "ann@example.com")
+	cfg = config.SetFactotum(cfg, f)
+	cfg = config.SetDirEndpoint(cfg, upspin.Endpoint{Transport: upspin.Remote, NetAddr: "dir.example.com:443"})
+	cfg = config.SetStoreEndpoint(cfg, upspin.Endpoint{Transport: upspin.Remote, NetAddr: "store.example.com:443"})
+	if dir != "" {
+		cfg = config.SetValue(cfg, ConfigKey, dir)
+	}
+	return cfg
+}
+
+// dialAs is dial, for a caller that supplies its own config and endpoint.
+func dialAs(t *testing.T, cfg upspin.Config, e upspin.Endpoint, base map[upspin.UserName]*upspin.User) (upspin.KeyServer, *bool) {
+	t.Helper()
+	dialed := new(bool)
+	svc, err := Wrap(&fakeKey{dialed: dialed, users: base}).Dial(cfg, e)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	return svc.(upspin.KeyServer), dialed
+}
+
+// TestUnassignedAnswersOwnUser covers the configuration that names no key
+// server at all. It must still be able to name itself: every operation on its
+// own tree resolves its own name, so without this the user could reach the
+// users she had pinned but not her own files.
+func TestUnassignedAnswersOwnUser(t *testing.T) {
+	dir := t.TempDir()
+	ks, dialed := dialAs(t, selfConfig(t, dir), upspin.Endpoint{Transport: upspin.Unassigned}, nil)
+
+	got, err := ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if want := annUser(); got.Name != want.Name || got.PublicKey != want.PublicKey ||
+		len(got.Dirs) != 1 || got.Dirs[0] != want.Dirs[0] ||
+		len(got.Stores) != 1 || got.Stores[0] != want.Stores[0] {
+		t.Errorf("Lookup = %+v; want %+v", got, want)
+	}
+	if *dialed {
+		t.Error("the wrapped key server was dialed for the config's own user")
+	}
+
+	// Nobody else, though: the configuration speaks for itself alone, and
+	// that is what keeps the pinned directory a complete substitute for a
+	// key server rather than a cache in front of one.
+	if _, err := ks.Lookup("bob@example.com"); err == nil {
+		t.Error("Lookup of another unpinned user succeeded")
+	}
+}
+
+// TestPinOutranksOwnUser: the configuration answering for itself is the last
+// resort, not a new authority. A pinned record still wins, so a user who has
+// deliberately pinned her own record, perhaps one attested by her domain, gets
+// that record and not the one assembled from her config.
+func TestPinOutranksOwnUser(t *testing.T) {
+	dir := t.TempDir()
+	pinned := annUser()
+	pinned.Dirs = []upspin.Endpoint{{Transport: upspin.Remote, NetAddr: "other.example.com:443"}}
+	if err := Write(dir, pinned); err != nil {
+		t.Fatal(err)
+	}
+	ks, _ := dialAs(t, selfConfig(t, dir), upspin.Endpoint{Transport: upspin.Unassigned}, nil)
+
+	got, err := ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got.Dirs[0] != pinned.Dirs[0] {
+		t.Errorf("Lookup returned the config's endpoint, not the pinned one")
+	}
+}
+
+// TestNamedKeyServerIsAskedForOwnUser is the reason the answer above is
+// confined to the unassigned transport. A configuration that names a key
+// server must still ask it about its own user, or "upspin user" could no
+// longer report a configuration that disagrees with the record the server
+// holds: it would be comparing the configuration with itself.
+func TestNamedKeyServerIsAskedForOwnUser(t *testing.T) {
+	stored := annUser()
+	stored.PublicKey = bobKey
+	ks, dialed := dialAs(t, selfConfig(t, ""), upspin.Endpoint{Transport: upspin.InProcess},
+		map[upspin.UserName]*upspin.User{"ann@example.com": stored})
+
+	got, err := ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got.PublicKey != bobKey {
+		t.Errorf("Lookup answered from the configuration, not from the key server")
+	}
+	if !*dialed {
+		t.Error("the wrapped key server was not dialed for the config's own user")
+	}
+}

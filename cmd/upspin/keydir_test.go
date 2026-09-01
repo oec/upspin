@@ -485,6 +485,31 @@ func keyDirTests(t *testing.T, tmp string) []cmdTest {
 			"",
 			expect("removed the trust anchors for example.net"),
 		},
+		{
+			// With no key server, the configuration is the last
+			// thing that can answer for its own user, and it must:
+			// every operation on a user's own tree begins by
+			// resolving her own name, so a user who could not name
+			// herself could reach the users she had pinned but not
+			// her own files. Unpin her and she can still say who
+			// she is, from the config and her own key pair.
+			//
+			// This case is last because the servers share the
+			// pinned directory: once dana is not in it they can no
+			// longer verify her requests.
+			"a user names herself with no key server and no pin",
+			dana,
+			do(
+				"keytrust -remove dana@example.net",
+				"user",
+			),
+			"",
+			expect(
+				"removed dana@example.net",
+				"name: dana@example.net",
+				"# fingerprint: SHA256:",
+			),
+		},
 	}...)
 }
 

@@ -114,7 +114,8 @@ func FromFile(name string) (upspin.Config, error) {
 // Any endpoints (keyserver, dirserver, storeserver) not set in the data for
 // the config will be set to the "unassigned" transport and an empty network
 // address. A configuration that names no keyserver must name a keydir, from
-// which users are then resolved; see upspin.io/key/trust.
+// which other users are then resolved; its own user it resolves from itself.
+// See upspin.io/key/trust.
 // If an endpoint is specified without a transport it is assumed to be
 // the address component of a remote endpoint.
 // If a remote endpoint is specified without a port in its address component

@@ -95,6 +95,17 @@
 // server: there is nothing for a published record to be checked against, and
 // neither source is consulted.
 //
+// A configuration that names no key server, its key endpoint unassigned,
+// answers for its own user from itself, after the pins and the sets and before
+// a wrapped server that could only fail. The record holds nothing that is not
+// in the configuration already: the user name, the two endpoints, and the
+// public half of the factotum's key pair. Every operation on a user's own tree
+// begins by resolving her own name, so without this she would have to pin
+// herself in order to name herself. A pinned record for her still wins, and a
+// configuration that does name a key server asks it as before, which is what
+// lets "upspin user" report a configuration that disagrees with the record the
+// server holds.
+//
 // Two properties follow from the order rather than from any one source. This
 // package must be registered as the outermost KeyServer wrapper, enclosing
 // key/usercache rather than enclosed by it, or a cached answer from a key
@@ -149,10 +160,11 @@ func Dir(cfg upspin.Config) (string, error) {
 	return dir, nil
 }
 
-// CheckKeyEndpoint reports an error if the configuration can resolve no users
-// at all: that is, if its key endpoint is unassigned and it names no directory
-// of pinned records. An unassigned key endpoint is otherwise legitimate, and
-// means that users are resolved only from that directory.
+// CheckKeyEndpoint reports an error if the configuration can resolve nobody
+// but itself: that is, if its key endpoint is unassigned and it names no
+// directory of pinned records. An unassigned key endpoint is otherwise
+// legitimate, and means that other users are resolved only from that
+// directory.
 func CheckKeyEndpoint(cfg upspin.Config) error {
 	const op errors.Op = "key/trust.CheckKeyEndpoint"
 	if cfg.KeyEndpoint().Transport != upspin.Unassigned {
