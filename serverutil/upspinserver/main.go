@@ -111,7 +111,35 @@ func setTrust(cfg upspin.Config, serverConfig *subcmd.ServerConfig, dir string) 
 		if !filepath.IsAbs(keyDir) {
 			keyDir = filepath.Join(dir, keyDir)
 		}
+		// A directory that is not there is a configuration error, not
+		// an empty admission list. Left alone it authenticates nobody
+		// and says nothing about why: every request fails its
+		// signature check with the same error an unknown user gets,
+		// and the server logs nothing at all. A relative KeyDir
+		// resolved against an unexpected directory is the usual way to
+		// arrive here, so the message names the path that was tried.
+		fi, err := os.Stat(keyDir)
+		if err != nil {
+			return nil, errors.Errorf("KeyDir: %v", err)
+		}
+		if !fi.IsDir() {
+			return nil, errors.Errorf("KeyDir: %s is not a directory", keyDir)
+		}
 		cfg = config.SetValue(cfg, trust.ConfigKey, keyDir)
+
+		// Say what the directory holds, so that an operator can see
+		// what the server decided rather than infer it from who can
+		// authenticate.
+		users, err := trust.List(keyDir)
+		if err != nil {
+			return nil, err
+		}
+		domains, err := trust.ListAnchors(keyDir)
+		if err != nil {
+			return nil, err
+		}
+		log.Info.Printf("Key directory %s: %d pinned records, trust anchors for %d domains.",
+			keyDir, len(users), len(domains))
 	}
 	if len(serverConfig.KeySets) > 0 {
 		// The configuration value is the YAML list that a client
@@ -124,8 +152,12 @@ func setTrust(cfg upspin.Config, serverConfig *subcmd.ServerConfig, dir string) 
 		cfg = config.SetValue(cfg, trust.SetsConfigKey, string(sets))
 	}
 	// Reject here what a lookup would otherwise reject one user at a time.
-	if _, err := trust.Sets(cfg); err != nil {
+	paths, err := trust.Sets(cfg)
+	if err != nil {
 		return nil, err
+	}
+	if len(paths) > 0 {
+		log.Info.Printf("Key sets: %s", paths)
 	}
 	return cfg, nil
 }

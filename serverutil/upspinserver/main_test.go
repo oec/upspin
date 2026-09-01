@@ -5,6 +5,7 @@
 package upspinserver
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +20,17 @@ import (
 // against the caller's key: the directory of pinned records and the Upspin
 // directories of published ones.
 func TestSetTrust(t *testing.T) {
-	const dir = "/etc/upspin/server"
+	// The server configuration directory, holding a key directory beside
+	// serverconfig.json, which is how setupserver arranges it.
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "keys"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	notADir := filepath.Join(dir, "serverconfig.json")
+	if err := os.WriteFile(notADir, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		name     string
 		server   subcmd.ServerConfig
@@ -37,8 +48,23 @@ func TestSetTrust(t *testing.T) {
 		},
 		{
 			name:    "absolute key directory",
-			server:  subcmd.ServerConfig{KeyDir: "/var/lib/upspin/keys"},
-			wantDir: "/var/lib/upspin/keys",
+			server:  subcmd.ServerConfig{KeyDir: elsewhere},
+			wantDir: elsewhere,
+		},
+		{
+			// The mistake this catches: a server that starts,
+			// serves, and authenticates nobody, because a relative
+			// KeyDir landed somewhere that does not exist. Every
+			// request then fails its signature check with the
+			// error an unknown user gets, and nothing says why.
+			name:    "key directory that is not there",
+			server:  subcmd.ServerConfig{KeyDir: "kyes"},
+			wantErr: true,
+		},
+		{
+			name:    "key directory that is a file",
+			server:  subcmd.ServerConfig{KeyDir: "serverconfig.json"},
+			wantErr: true,
 		},
 		{
 			name:     "one key set",
