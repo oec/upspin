@@ -9,6 +9,7 @@ import (
 
 	"upspin.io/errors"
 	"upspin.io/upspin"
+	"upspin.io/user"
 )
 
 // server is a KeyServer that answers from the pinned key directory, then from
@@ -76,6 +77,9 @@ func Wrap(s upspin.KeyServer) upspin.KeyServer {
 // A pinned record that is present but unusable is an error: the lookup does
 // not fall through, since that would let a damaged or tampered record be
 // replaced silently by whatever a key server chose to return.
+//
+// A record pinned as a trust anchor answers for the anchor's own user, just
+// after the pinned leaves: see anchorRecord.
 func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 	const op errors.Op = "key/trust.Lookup"
 	if s.dd.dir != "" {
@@ -87,7 +91,17 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 			}
 			return u, nil
 		case errors.Is(errors.NotExist, err):
-			// Not pinned; try the sources below.
+			// Not pinned as a leaf; an anchor is a pin too.
+			u, err := anchorRecord(s.dd.dir, name)
+			if err != nil {
+				return nil, errors.E(op, err)
+			}
+			if u != nil {
+				if err := s.checkStale(u); err != nil {
+					return nil, errors.E(op, err)
+				}
+				return u, nil
+			}
 		default:
 			// Present but unusable; see above.
 			return nil, errors.E(op, err)
@@ -127,6 +141,35 @@ func (s *server) Lookup(name upspin.UserName) (*upspin.User, error) {
 		return nil, errors.E(op, err)
 	}
 	return u, nil
+}
+
+// anchorRecord returns the record pinned as a trust anchor for name, under
+// whichever domain it is pinned, or nil if it is an anchor for none. An anchor
+// is verified out of band before it is pinned, which is the strongest reason
+// there is to believe a record; and the owner of a delegated key set is
+// usually the domain's anchor, whose own key must be known before the set
+// can be read at all. Without this, a directory holding nothing but anchors
+// could believe every attested user of a domain except the one who attests.
+func anchorRecord(dir string, name upspin.UserName) (*upspin.User, error) {
+	clean, err := user.Clean(name)
+	if err != nil {
+		return nil, err
+	}
+	domains, err := ListAnchors(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, domain := range domains {
+		anchors, err := ReadAnchors(dir, domain)
+		if err != nil {
+			// Present but unusable, like a damaged leaf.
+			return nil, err
+		}
+		if u := anchorFor(anchors, clean); u != nil {
+			return u, nil
+		}
+	}
+	return nil, nil
 }
 
 // self returns the record the configuration describes for its own user, or

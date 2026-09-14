@@ -86,6 +86,44 @@ func TestPinnedRecordWins(t *testing.T) {
 	}
 }
 
+// TestAnchorAnswersForItself: a record pinned as a trust anchor is a pinned
+// record for the anchor's own user, so the anchor, who usually owns the key
+// set that carries everyone else, can be reached without a separate leaf.
+func TestAnchorAnswersForItself(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteAnchor(dir, "example.org", annUser()); err != nil {
+		t.Fatal(err)
+	}
+	impostor := annUser()
+	impostor.PublicKey = bobKey
+	ks, dialed := dial(t, dir, map[upspin.UserName]*upspin.User{"ann@example.com": impostor})
+
+	got, err := ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if got.PublicKey != annKey {
+		t.Errorf("Lookup returned the key server's key, not the anchor's")
+	}
+	if *dialed {
+		t.Error("the wrapped key server was dialed for a user pinned as an anchor")
+	}
+
+	// A leaf still outranks the anchor record for the same user.
+	leaf := annUser()
+	leaf.Dirs = []upspin.Endpoint{{Transport: upspin.Remote, NetAddr: "elsewhere.example.com:443"}}
+	if err := Write(dir, leaf); err != nil {
+		t.Fatal(err)
+	}
+	got, err = ks.Lookup("ann@example.com")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if len(got.Dirs) != 1 || got.Dirs[0].NetAddr != "elsewhere.example.com:443" {
+		t.Errorf("Lookup returned %v; want the leaf's record", got.Dirs)
+	}
+}
+
 func TestLookupFallsThrough(t *testing.T) {
 	dir := t.TempDir()
 	bob := annUser()
