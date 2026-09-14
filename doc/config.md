@@ -5,7 +5,14 @@
 Every interaction with Upspin requires knowledge about the user: some or all of
 the user's Upspin name, directory server, key server, security keys, and so on.
 This information is described by a *configuration* that is by default stored in
-a *config file* stored in `$HOME/upspin/config`.
+a *config file* named `config` in the Upspin configuration directory.
+On Linux and other Unix systems that is `$XDG_CONFIG_HOME/upspin`, which is
+`$HOME/.config/upspin` unless the variable is set; `$HOME/upspin`, where earlier
+versions kept it, is looked in next, and then the system directories named by
+`$XDG_CONFIG_DIRS` (`/etc/xdg/upspin` by default), so a file in any of those
+places is found, the first one winning.
+The `-config` flag names another file; a relative name is looked for in the
+same directories.
 
 The config file is short but its contents mediate all interactions with Upspin,
 and although a user's config file is initially created by the `upspin` `signup`

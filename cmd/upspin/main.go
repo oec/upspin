@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -56,9 +55,13 @@ For instance
 explains the purpose and usage of the user subcommand.
 
 There is a set of global flags such as -config to identify the
-configuration file to use (default $HOME/upspin/config) and -log
-to set the logging level for debugging. These flags apply across
-the subcommands.
+configuration file to use and -log to set the logging level for
+debugging. These flags apply across the subcommands. The default
+configuration file is the one named config in the first directory
+that has one of $XDG_CONFIG_HOME/upspin (that is, $HOME/.config/upspin
+unless the variable is set), $HOME/upspin, and the directories of
+$XDG_CONFIG_DIRS (/etc/xdg by default) each with /upspin; a relative
+-config value is looked for in the same places.
 
 Each subcommand has its own set of flags, which if used must appear
 after the subcommand name. For example, to run the ls command with
@@ -293,19 +296,13 @@ func (s *State) init() {
 		// Read the config file and pass it to config.InitConfig
 		// instead of calling config.FromFile, so that we can stash its
 		// contents away for later use by the "config" sub-command.
-		data, err := os.ReadFile(flags.Config)
-		// Duplicate the logic of config.FromFile that looks for the
-		// config in $HOME/upspin/config if it can't be found at its
-		// specified location.
-		if os.IsNotExist(err) {
-			home, err2 := config.Homedir()
-			if err2 == nil {
-				data, err2 = os.ReadFile(filepath.Join(home, "upspin", flags.Config))
-				if err2 == nil {
-					err = nil
-				}
-			}
+		// A relative name is looked for where config.FromFile would
+		// look for it: in the configuration directories.
+		path, err := config.Find(flags.Config)
+		if err != nil {
+			s.Exit(err)
 		}
+		data, err := os.ReadFile(path)
 		if err != nil {
 			s.Exit(err)
 		}

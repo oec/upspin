@@ -25,7 +25,7 @@ The flags are:
 	-cachesize bytes
 		max disk bytes for cache (default 5000000000)
 	-config file
-		user's configuration file (default "$HOME/upspin/config")
+		user's configuration file (default "$HOME/.config/upspin/config")
 	-log level
 		level of logging: debug, info, error, disabled (default info)
 	-writethrough

@@ -26,9 +26,13 @@ For instance
 explains the purpose and usage of the user subcommand.
 
 There is a set of global flags such as -config to identify the
-configuration file to use (default $HOME/upspin/config) and -log
-to set the logging level for debugging. These flags apply across
-the subcommands.
+configuration file to use and -log to set the logging level for
+debugging. These flags apply across the subcommands. The default
+configuration file is the one named config in the first directory
+that has one of $XDG_CONFIG_HOME/upspin (that is, $HOME/.config/upspin
+unless the variable is set), $HOME/upspin, and the directories of
+$XDG_CONFIG_DIRS (/etc/xdg by default) each with /upspin; a relative
+-config value is looked for in the same places.
 
 Each subcommand has its own set of flags, which if used must appear
 after the subcommand name. For example, to run the ls command with
@@ -82,7 +86,7 @@ Global flags:
   -blocksize size
     	size of blocks when writing large files (default 1048576)
   -config file
-    	user's configuration file (default "/home/user/upspin/config")
+    	user's configuration file (default "/home/user/.config/upspin/config")
   -log level
     	level of logging: debug, info, error, disabled (default info)
   -prudent
@@ -948,7 +952,8 @@ name distinct from one's regular email address. Either way, if the email
 address is compromised after Upspin signup, the security of the user's
 Upspin data is unaffected.
 
-Signup writes a configuration file to $HOME/upspin/config, holding the
+Signup writes a configuration file to the default location (see the
+-config flag; $HOME/.config/upspin/config on Linux), holding the
 username and the location of the directory and store servers. It writes the
 public and private keys to $HOME/.ssh. These locations may be set using the
 global -config and signup-specific -where flags.

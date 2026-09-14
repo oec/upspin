@@ -54,12 +54,10 @@ var (
 	readyCh   = make(chan struct{})
 )
 
+// defaultCfgPath is the server directory in the first configuration
+// directory that has one, or its place in the first of them: see config.Dirs.
 func defaultCfgPath() string {
-	home, err := config.Homedir()
-	if err != nil {
-		home = "/"
-	}
-	return filepath.Join(home, "upspin", "server")
+	return config.DefaultFile("server")
 }
 
 func Main() (ready chan struct{}) {

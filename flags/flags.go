@@ -39,7 +39,7 @@ const (
 var (
 	defaultCacheDir         = upspinDir("")
 	defaultLetsEncryptCache = upspinDir("letsencrypt")
-	defaultConfig           = upspinDir("config")
+	defaultConfig           = config.DefaultFile("config")
 )
 
 func upspinDir(subdir string) string {
@@ -82,7 +82,10 @@ var (
 	// the various file caches. This is only approximate.
 	CacheSize = defaultCacheSize
 
-	// Config ("config") names the Upspin configuration file to use.
+	// Config ("config") names the Upspin configuration file to use. The
+	// default is the file named config in the first of the configuration
+	// directories that holds one (see config.Dirs), or, with none, its
+	// place in the first of them: $HOME/.config/upspin/config on Linux.
 	Config = defaultConfig
 
 	// HTTPAddr ("http") is the network address on which to listen for

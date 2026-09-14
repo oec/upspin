@@ -80,16 +80,15 @@ var ErrNoFactotum = errors.Str("factotum not initialized: no secrets provided")
 // FromFile initializes a config using the given file. If the file cannot
 // be opened but the name can be found in $HOME/upspin, that file is used.
 func FromFile(name string) (upspin.Config, error) {
-	f, err := os.Open(name)
-	if err != nil && !filepath.IsAbs(name) && os.IsNotExist(err) {
-		// It's a local name, so, try adding $HOME/upspin
-		home, errHome := Homedir()
-		if errHome == nil {
-			f, err = os.Open(filepath.Join(home, "upspin", name))
-		}
-	}
+	const op errors.Op = "config.FromFile"
+	// A relative name is looked for in the configuration directories;
+	// see Dirs.
+	path, err := Find(name)
 	if err != nil {
-		const op errors.Op = "config.FromFile"
+		return nil, errors.E(op, err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errors.E(op, errors.NotExist, err)
 		}
@@ -108,8 +107,12 @@ func FromFile(name string) (upspin.Config, error) {
 // where key may be one of username, keyserver, dirserver, storeserver,
 // packing, secrets, keydir, keysets, keydiscovery, or tlscerts.
 //
-// The default configuration file location is $HOME/upspin/config.
-// If passed a non-nil io.Reader, that is used instead of the default file.
+// The default configuration file is named config and is looked for in the
+// configuration directories: $XDG_CONFIG_HOME/upspin, which is
+// $HOME/.config/upspin unless the variable is set, then $HOME/upspin, then
+// the system directories of $XDG_CONFIG_DIRS, /etc/xdg/upspin by default.
+// See Dirs. If passed a non-nil io.Reader, that is used instead of the
+// default file.
 //
 // Any endpoints (keyserver, dirserver, storeserver) not set in the data for
 // the config will be set to the "unassigned" transport and an empty network
@@ -162,13 +165,13 @@ func InitConfig(r io.Reader) (upspin.Config, error) {
 	}
 	other := make(map[string]interface{})
 
-	// If the provided reader is nil, try $HOME/upspin/config.
+	// If the provided reader is nil, use the default file.
 	if r == nil {
-		home, err := Homedir()
+		path, err := Find("config")
 		if err != nil {
 			return nil, errors.E(op, err)
 		}
-		f, err := os.Open(filepath.Join(home, "upspin/config"))
+		f, err := os.Open(path)
 		if err != nil {
 			return nil, errors.E(op, err)
 		}
