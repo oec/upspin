@@ -13,4 +13,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require google.golang.org/protobuf v1.33.0 // indirect
+require (
+	google.golang.org/protobuf v1.33.0 // indirect
+	rsc.io/qr v0.2.0 // indirect
+)
