@@ -91,6 +91,7 @@ var commands = map[string]func(*State, ...string){
 	"ls":                 (*State).ls,
 	"mkdir":              (*State).mkdir,
 	"put":                (*State).put,
+	"qr":                 (*State).qr,
 	"repack":             (*State).repack,
 	"rotate":             (*State).rotate,
 	"rm":                 (*State).rm,

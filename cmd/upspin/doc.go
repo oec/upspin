@@ -63,6 +63,7 @@ Upspin commands:
 	ls
 	mkdir
 	put
+	qr
 	repack
 	rm
 	rotate
@@ -587,6 +588,62 @@ Flags:
     	input file (default standard input)
   -packing string
     	packing to use (default from user's config)
+
+
+
+Sub-command qr
+
+Usage: upspin qr [-text | -compact | -out=file] [-pins]
+              qr [-text | -compact | -out=file] -anchors [domain...]
+              qr [-text | -compact | -out=file] -self [domain...]
+
+Qr shows, as a QR code on the terminal, everything another device
+needs in order to act as this user: the user name, the directory and
+store server endpoints, the packing, the key sets and discovery
+setting, the key pair, and the trust anchors pinned in the keydir.
+The Upspin app for Android installs itself from it.
+
+The code contains the private key. Show it only on a screen you
+trust, and only to a device you trust; anyone who scans it is you.
+
+With -text, qr prints the provisioning document itself instead of a
+code, which is what the code contains, compressed; with -compact, the
+code's contents as one line of text, which the app also accepts
+pasted; with -out, it writes the document to a file, for moving by
+some other means. With
+-pins, the pinned leaf records are included as well as the anchors,
+which is rarely needed, since a device that has the anchors can accept
+any attested record, and makes the code larger.
+
+With -anchors, qr shows a different and smaller document: only the
+trust anchors pinned in the keydir, for the domains named as arguments
+or for every domain when none are, and no identity at all. It is for
+a device that already has an identity and needs to be told whom to
+believe about a domain. With -self, the document instead offers this
+configuration's own user as the trust anchor for its own domain, or
+for the domains named: this is how the owner of an anchor key hands
+it out. Whoever scans it will believe every record it attests, so show
+it in person; the app shows the fingerprint before pinning.
+
+The code is drawn with block characters and its own colors, so it is
+readable on a light or a dark terminal, but it must fit: a document of
+usual size needs a window about 80 columns wide.
+
+Flags:
+  -anchors
+    	show only the pinned trust anchors, for the domains named or all
+  -compact
+    	print the code's contents as one line of text, for pasting
+  -help
+    	print more information about the command
+  -out file
+    	write the provisioning document to file instead of showing a code
+  -pins
+    	include the pinned leaf records, not only the trust anchors
+  -self
+    	offer this user as the trust anchor for its domain, or the domains named
+  -text
+    	print the provisioning document instead of a code
 
 
 
