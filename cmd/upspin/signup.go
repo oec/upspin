@@ -39,7 +39,8 @@ name distinct from one's regular email address. Either way, if the email
 address is compromised after Upspin signup, the security of the user's
 Upspin data is unaffected.
 
-Signup writes a configuration file to $HOME/upspin/config, holding the
+Signup writes a configuration file to the default location (see the
+-config flag; $HOME/.config/upspin/config on Linux), holding the
 username and the location of the directory and store servers. It writes the
 public and private keys to $HOME/.ssh. These locations may be set using the
 global -config and signup-specific -where flags.
@@ -82,14 +83,14 @@ fingerprint one by one. See the keytrust and keysign commands.
 
 	s.ParseFlags(fs, args, help, "[-config=<file>] signup -dir=<addr> -store=<addr> [flags] <username>\n       upspin [-config=<file>] signup -server=<addr> [flags] <username>")
 
-	// Determine config file location.
+	// Determine config file location: a relative name goes in the
+	// user's configuration directory, where it will be found again.
 	if !filepath.IsAbs(flags.Config) {
-		// User must have a home dir in the local OS.
-		homedir, err := config.Homedir()
-		if err != nil {
-			s.Exit(err)
+		dirs := config.Dirs()
+		if len(dirs) == 0 {
+			s.Exitf("cannot determine a configuration directory; give -config an absolute path")
 		}
-		flags.Config = filepath.Join(homedir, flags.Config)
+		flags.Config = filepath.Join(dirs[0], flags.Config)
 	}
 
 	// There is no default key server. There was, and it named a host that
